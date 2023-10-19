@@ -867,7 +867,7 @@ static ERL_NIF_TERM nif_betree_search_t(ErlNifEnv* env, int argc, const ERL_NIF_
     size_t pred_index = 0;
     struct betree_event* event = NULL;
     struct timespec start, done;
-    clockid_t clock_type;
+    int clock_type;
 
     if(argc != 3) {
         retval = enif_make_badarg(env);
