@@ -21,6 +21,9 @@ betree_exists(Betree, Event) ->
     erl_betree_nif:betree_exists(Betree, Event).
 betree_search(Betree, Event) ->
     erl_betree_nif:betree_search(Betree, Event).
+
+% @doc Calculates time spend in NIF. 
+% Time value is in microseconds - the erlang:timestamp resolution.  
 betree_search(Betree, Event, CLockType) ->
     erl_betree_nif:betree_search(Betree, Event, check_clock_type(CLockType)).
 
