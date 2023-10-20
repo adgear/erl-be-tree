@@ -934,6 +934,7 @@ static ERL_NIF_TERM nif_betree_search_t(ErlNifEnv* env, int argc, const ERL_NIF_
 	}
 
     clock_gettime(clock_type, &done);
+    // Convert to microseconds
     ErlNifSInt64 tspent = (done.tv_sec - start.tv_sec) * 1000000 + (done.tv_nsec - start.tv_nsec) / 1000;
     ERL_NIF_TERM etspent = enif_make_int64(env, tspent);
     retval = enif_make_tuple3(env, atom_ok, res, etspent);
