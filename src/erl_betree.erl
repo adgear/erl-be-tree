@@ -32,7 +32,7 @@ betree_search(Betree, Event, CLockType) ->
 -define(CLOCK_PROCESS_CPUTIME_ID, 12). 
 -define(CLOCK_THREAD_CPUTIME_ID, 16). 
 
-check_clock_type(?CLOCK_MONOTONIC) -> ?CLOCK_MONOTONIC;
+check_clock_type(?CLOCK_REALTIME) -> ?CLOCK_REALTIME;
 check_clock_type(?CLOCK_PROCESS_CPUTIME_ID) -> ?CLOCK_PROCESS_CPUTIME_ID;
 check_clock_type(?CLOCK_THREAD_CPUTIME_ID) -> ?CLOCK_THREAD_CPUTIME_ID;
-check_clock_type(_) -> ?CLOCK_REALTIME.
+check_clock_type(_) -> ?CLOCK_MONOTONIC.
