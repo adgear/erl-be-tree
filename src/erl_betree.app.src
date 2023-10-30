@@ -1,6 +1,6 @@
 {application, erl_betree, [
-    {description, "An OTP library"},
-    {vsn, "0.1.0"},
+    {description, "Erlang NIF envelope for b-tree library"},
+    {vsn, "0.1.1"},
     {registered, []},
     {applications, [kernel, stdlib]},
     {env,[]},
