@@ -38,6 +38,15 @@ basic_test() ->
     {ok, Sub} = erl_betree:betree_make_sub(Betree, 1, [], Expr),
     ok = erl_betree:betree_insert_sub(Betree, Sub),
     {ok, [1]} = erl_betree:betree_search(Betree, Event).
+basic_t_test() ->
+    Domains = [[{i, int, disallow_undefined, 0, 10}]],
+    Expr = <<"i = 5">>,
+    Event = [#basic_test{ i = 5 }],
+    {ok, Betree} = erl_betree:betree_make(Domains),
+    {ok, Sub} = erl_betree:betree_make_sub(Betree, 1, [], Expr),
+    ok = erl_betree:betree_insert_sub(Betree, Sub),
+    {{ok, [1]}, N} = erl_betree:betree_search(Betree, Event, 6),
+    true = is_integer(N).
 
 bad_insert_no_domain_test() ->
     Expr = <<"i = 5">>,

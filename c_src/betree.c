@@ -1,6 +1,7 @@
 #include <float.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #include "erl_nif.h"
 
@@ -859,6 +860,30 @@ cleanup:
     return retval;
 }
 
+static ERL_NIF_TERM nif_betree_search_t(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    if(argc != 3) {
+        return enif_make_badarg(env);
+    }
+
+    int clock_type;
+    if (!enif_get_int(env, argv[2], &clock_type)) {
+	    return enif_make_badarg(env);
+    }
+    struct timespec start, done;
+    clock_gettime(clock_type, &start);
+    ERL_NIF_TERM search_res = nif_betree_search(env, argc - 1, argv);
+    if (!enif_is_tuple(env, search_res)) {
+        return search_res;
+    }
+    clock_gettime(clock_type, &done);
+    // Convert to microseconds
+    ErlNifSInt64 tspent = (done.tv_sec - start.tv_sec) * 1000000 + (done.tv_nsec - start.tv_nsec) / 1000;
+    ERL_NIF_TERM etspent = enif_make_int64(env, tspent);
+    ERL_NIF_TERM retval = enif_make_tuple2(env, search_res, etspent);
+    return retval;
+}
+
 static ERL_NIF_TERM nif_betree_exists(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
     ERL_NIF_TERM retval;
@@ -948,7 +973,8 @@ static ErlNifFunc nif_functions[] = {
     {"betree_make_sub", 4, nif_betree_make_sub, 0},
     {"betree_insert_sub", 2, nif_betree_insert_sub, 0},
     {"betree_exists", 2, nif_betree_exists, 0},
-    {"betree_search", 2, nif_betree_search, 0}
+    {"betree_search", 2, nif_betree_search, 0},
+    {"betree_search", 3, nif_betree_search_t, 0}
     /*{"betree_delete", 2, nif_betree_delete, 0}*/
 };
 
