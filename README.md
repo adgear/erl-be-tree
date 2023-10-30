@@ -6,7 +6,7 @@ erl_betree
 Overview
 -----
 
-NIFs for interacting with https://github.com/FrankBro/be-tree
+NIFs for interacting with http://github.com/adgear/be-tree
 
 Build
 -----
