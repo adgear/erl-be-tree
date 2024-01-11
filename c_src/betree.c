@@ -9,6 +9,7 @@
 
 // return values
 static ERL_NIF_TERM atom_ok;
+static ERL_NIF_TERM atom_ok_continuation;
 static ERL_NIF_TERM atom_error;
 static ERL_NIF_TERM atom_bad_expr;
 static ERL_NIF_TERM atom_bad_event;
@@ -44,6 +45,7 @@ static ERL_NIF_TERM atom_unknown;
 
 static ErlNifResourceType* MEM_BETREE;
 static ErlNifResourceType* MEM_SUB;
+static ErlNifResourceType* MEM_TRAPPED_SEARCH;
 
 struct sub {
     const struct betree_sub* sub;
@@ -67,6 +69,33 @@ static void cleanup_betree(ErlNifEnv* env, void* obj)
     betree_deinit(betree);
 }
 
+typedef struct {
+    struct betree* betree;
+    struct betree_event* event;
+} trapped_search_t;
+
+static void trapped_search_dtor(ErlNifEnv* env, void* obj)
+{
+    (void)env;
+    if (obj == NULL)
+    {
+        return;
+    }
+    trapped_search_t* trapped_search = obj;
+    if (trapped_search->event != NULL)
+    {
+        betree_free_event(trapped_search->event);
+        trapped_search->event = NULL;
+    }
+
+    if (trapped_search->betree != NULL)
+    {
+        // trapped_state->betree clean up as "betree" resource type,
+        // see MEM_BETREE = enif_open_resource_type(...) in load function.
+        // Thus, betree_deinit(trapped_state->betree) is not needed here.
+        trapped_search->betree = NULL;
+    }
+}
 
 static int load(ErlNifEnv* env, void **priv_data, ERL_NIF_TERM load_info)
 {
@@ -74,6 +103,7 @@ static int load(ErlNifEnv* env, void **priv_data, ERL_NIF_TERM load_info)
     (void)load_info;
 
     atom_ok = make_atom(env, "ok");
+    atom_ok_continuation = make_atom(env, "ok_continuation");
     atom_error = make_atom(env, "error");
     atom_bad_expr = make_atom(env, "bad_expr");
     atom_bad_event = make_atom(env, "bad_event");
@@ -111,6 +141,16 @@ static int load(ErlNifEnv* env, void **priv_data, ERL_NIF_TERM load_info)
     // We don't own the betree_sub, betree will deinit it. No dtor
     MEM_SUB = enif_open_resource_type(env, NULL, "sub", NULL, flags, NULL);
     if(MEM_SUB == NULL) {
+        return -1;
+    }
+
+    MEM_TRAPPED_SEARCH = enif_open_resource_type(env,
+                                         NULL,
+                                         "trapped_search",
+                                         trapped_search_dtor,
+                                         ERL_NIF_RT_CREATE|ERL_NIF_RT_TAKEOVER,
+                                         NULL);
+    if(MEM_TRAPPED_SEARCH == NULL) {
         return -1;
     }
 
@@ -945,6 +985,142 @@ cleanup:
     return retval;
 }
 
+static struct betree_event* make_event(ErlNifEnv* env, struct betree* betree, ERL_NIF_TERM event_tail)
+{
+    unsigned int list_len;
+    if(!enif_get_list_length(env, event_tail, &list_len)) {
+        return NULL;
+    }
+
+    struct betree_event* event = betree_make_event(betree);
+    ERL_NIF_TERM head;
+
+    const ERL_NIF_TERM* tuple;
+    int tuple_len;
+    size_t pred_index = 0;
+
+    for(unsigned int i = 0; i < list_len; i++) {
+        if(!enif_get_list_cell(env, event_tail, &head, &event_tail)) {
+            betree_free_event(event);
+            return NULL;
+        }
+
+        if(!enif_get_tuple(env, head, &tuple_len, &tuple)) {
+            betree_free_event(event);
+            return NULL;
+        }
+
+        if(!add_variables(env, betree, event, tuple, tuple_len, pred_index)) {
+            betree_free_event(event);
+            return NULL;
+        }
+        pred_index += (tuple_len - 1);
+    }
+    return event;
+}
+
+static ERL_NIF_TERM betree_search_and_report(ErlNifEnv* env, struct betree* betree, struct betree_event* event)
+{
+    struct report* report = make_report();
+    if (report == NULL) {
+        return enif_make_badarg(env);
+    }
+
+    bool result = betree_search_with_event(betree, event, report);
+    if(result == false) {
+        free_report(report);
+        return enif_make_badarg(env);
+    }
+
+    ERL_NIF_TERM res = enif_make_list(env, 0);
+    for (size_t i = report->matched; i;) {
+        i--;
+        res = enif_make_list_cell(env, enif_make_uint64(env, report->subs[i]), res);
+    }
+    free_report(report);
+    return res;
+}
+
+static ERL_NIF_TERM betree_search_continuation(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    if(argc != 1) {
+        return enif_make_badarg(env);
+    }
+
+    trapped_search_t* trapped_search;
+    enif_get_resource(env, argv[0], MEM_TRAPPED_SEARCH, (void**)&trapped_search);
+    if (trapped_search == NULL) {
+        return enif_make_badarg(env);
+    }
+
+    ERL_NIF_TERM res = betree_search_and_report(env, trapped_search->betree, trapped_search->event);
+    return enif_make_tuple2(env, atom_ok_continuation, res);
+}
+
+static int should_yield(ErlNifEnv* env, int timeslice)
+{
+    if (timeslice >= 100) return 1;
+    if (timeslice <= 0) return 0;
+    return enif_consume_timeslice(env, timeslice);
+}
+
+static ERL_NIF_TERM schedule_continuation(ErlNifEnv* env, struct betree* betree, struct betree_event*  event)
+{
+    trapped_search_t* trapped_search =
+            enif_alloc_resource(MEM_TRAPPED_SEARCH, sizeof(trapped_search_t));
+    if (trapped_search == NULL) {
+        betree_free_event(event);
+        return enif_make_badarg(env);
+    }
+
+    trapped_search->betree = betree;
+    trapped_search->event = event;
+
+    ERL_NIF_TERM argv_continuation[1];
+    argv_continuation[0] = enif_make_resource(env, trapped_search);
+    enif_release_resource(trapped_search);
+
+    return enif_schedule_nif(env,
+                             "betree_search_continuation", 0,
+                             betree_search_continuation,
+                             1, argv_continuation);
+}
+
+static ERL_NIF_TERM nif_betree_search_yielding(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    if(argc != 3) {
+        return enif_make_badarg(env);
+    }
+
+    struct betree* betree = get_betree(env, argv[0]);
+    if (betree == NULL) {
+        return enif_make_badarg(env);
+    }
+
+    struct betree_event* event = make_event(env, betree, argv[1]);
+    if (event == NULL) {
+        // DO NOT deinit betree, leave it alone!
+        // betree_deinit(betree);
+        return enif_make_badarg(env);
+    }
+
+    bool success;
+    int timeslice;
+    success = enif_get_int(env, argv[2], &timeslice);
+    if (! success) {
+        timeslice = 0;
+    }
+
+    int must_yield = should_yield(env, timeslice);
+
+    if (must_yield) {
+        return schedule_continuation(env, betree, event);
+    }
+
+    ERL_NIF_TERM res = betree_search_and_report(env, betree, event);
+    return enif_make_tuple2(env, atom_ok, res);
+}
+
 /*static ERL_NIF_TERM nif_betree_delete(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])*/
 /*{*/
     /*ERL_NIF_TERM retval;*/
@@ -974,8 +1150,9 @@ static ErlNifFunc nif_functions[] = {
     {"betree_insert_sub", 2, nif_betree_insert_sub, 0},
     {"betree_exists", 2, nif_betree_exists, 0},
     {"betree_search", 2, nif_betree_search, 0},
-    {"betree_search", 3, nif_betree_search_t, 0}
-    /*{"betree_delete", 2, nif_betree_delete, 0}*/
+    {"betree_search", 3, nif_betree_search_t, 0},
+    {"betree_search_yielding", 3, nif_betree_search_yielding, 0}
+        /*{"betree_delete", 2, nif_betree_delete, 0}*/
 };
 
 ERL_NIF_INIT(erl_betree_nif, nif_functions, &load, NULL, NULL, NULL);
