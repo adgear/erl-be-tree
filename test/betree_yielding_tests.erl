@@ -2,8 +2,9 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
-%% API
--export([run_valid/4]).
+%%
+%% Yielding counterparts of betree_tests.erl
+%%
 
 check_yielding(Betree, Event, undefined) ->
   {R_no_yielding, _} = erl_betree:betree_search_yielding(Betree, Event, 0),

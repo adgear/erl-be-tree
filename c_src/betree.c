@@ -1152,8 +1152,7 @@ static ErlNifFunc nif_functions[] = {
     {"betree_search", 2, nif_betree_search, 0},
     {"betree_search", 3, nif_betree_search_t, 0},
     {"betree_search_yielding", 3, nif_betree_search_yielding, 0}
-        /*{"betree_delete", 2, nif_betree_delete, 0}*/
+    /*{"betree_delete", 2, nif_betree_delete, 0}*/
 };
 
 ERL_NIF_INIT(erl_betree_nif, nif_functions, &load, NULL, NULL, NULL);
-
