@@ -4,8 +4,8 @@
 #include <time.h>
 
 #include "erl_nif.h"
-
 #include "betree.h"
+#include "debug.h"
 
 // return values
 static ERL_NIF_TERM atom_ok;
@@ -945,6 +945,25 @@ cleanup:
     return retval;
 }
 
+static ERL_NIF_TERM betree_write_dot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    char file_name[1024];
+
+    if(argc != 2) {
+        return enif_make_badarg(env);
+    }
+    struct betree* betree = get_betree(env, argv[0]);
+    if(betree == NULL) {
+        return enif_make_badarg(env);
+    }
+    if (!enif_get_string(env, argv[1], file_name, 1024, ERL_NIF_UTF8)) {
+	    return enif_make_badarg(env);
+    }
+    
+    write_dot_to_file(betree, file_name);
+    return enif_make_atom(env, "ok");    
+}
+
 /*static ERL_NIF_TERM nif_betree_delete(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])*/
 /*{*/
     /*ERL_NIF_TERM retval;*/
@@ -974,7 +993,8 @@ static ErlNifFunc nif_functions[] = {
     {"betree_insert_sub", 2, nif_betree_insert_sub, 0},
     {"betree_exists", 2, nif_betree_exists, 0},
     {"betree_search", 2, nif_betree_search, 0},
-    {"betree_search", 3, nif_betree_search_t, 0}
+    {"betree_search", 3, nif_betree_search_t, 0},
+    {"betree_write_dot", 2, betree_write_dot, ERL_DIRTY_JOB_IO_BOUND}
     /*{"betree_delete", 2, nif_betree_delete, 0}*/
 };
 

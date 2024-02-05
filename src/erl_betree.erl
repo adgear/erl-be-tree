@@ -6,7 +6,8 @@
     betree_insert_sub/2,
     betree_exists/2,
     betree_search/2,
-    betree_search/3
+    betree_search/3,
+    betree_write_dot/2
 ]).
 
 -inline([check_clock_type/1]).
@@ -26,6 +27,9 @@ betree_search(Betree, Event) ->
 % Time value is in microseconds - the erlang:timestamp resolution.  
 betree_search(Betree, Event, CLockType) ->
     erl_betree_nif:betree_search(Betree, Event, check_clock_type(CLockType)).
+
+betree_write_dot(Betree, FileName) when is_list(FileName) ->
+    erl_betree_nif:betree_write_dot(Betree, FileName).
 
 -define(CLOCK_REALTIME, 0). 
 -define(CLOCK_MONOTONIC, 6). 
