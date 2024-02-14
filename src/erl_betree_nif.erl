@@ -10,6 +10,7 @@
     betree_exists/2,
     betree_search/2,
     betree_search/3,
+    betree_search_ids/4,
     betree_write_dot/2
 ]).
 
@@ -45,6 +46,8 @@ betree_exists(_Betree, _Event) ->
 betree_search(_Betree, _Event) ->
     ?nif_stub.
 betree_search(_Betree, _Event, _ClockType) ->
+    ?nif_stub.
+betree_search_ids(_Betree, _Event, _Ids, _ClockType) ->
     ?nif_stub.
 
 betree_write_dot(_Betree, _FileName) ->

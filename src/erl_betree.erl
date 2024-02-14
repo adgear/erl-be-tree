@@ -7,6 +7,8 @@
     betree_exists/2,
     betree_search/2,
     betree_search/3,
+    betree_search_ids/3,
+    betree_search_ids/4,
     betree_write_dot/2
 ]).
 
@@ -35,6 +37,17 @@ betree_write_dot(Betree, FileName) when is_list(FileName) ->
 -define(CLOCK_MONOTONIC, 6). 
 -define(CLOCK_PROCESS_CPUTIME_ID, 12). 
 -define(CLOCK_THREAD_CPUTIME_ID, 16). 
+
+betree_search_ids(Betree, Event, Ids) ->
+    betree_search_ids(Betree, Event, Ids, ?CLOCK_MONOTONIC). 
+
+% @doc Do search for only those ids which are presented in Ids list
+% Also calculates time spend in NIF. 
+% Time value is in microseconds - the erlang:timestamp resolution.  
+betree_search_ids(_Betree, _Event, [], _CLockType)  ->
+    {0, []};
+betree_search_ids(Betree, Event, Ids, CLockType) when is_list(Ids) ->
+    erl_betree_nif:betree_search_ids(Betree, Event, Ids, check_clock_type(CLockType)).
 
 check_clock_type(?CLOCK_REALTIME) -> ?CLOCK_REALTIME;
 check_clock_type(?CLOCK_PROCESS_CPUTIME_ID) -> ?CLOCK_PROCESS_CPUTIME_ID;
