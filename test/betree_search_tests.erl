@@ -120,5 +120,11 @@ atom_ids_search_term_test() ->
     {ok, Sub3} = erl_betree:betree_make_sub(Betree, 3, Consts, Expr2),
     ok = erl_betree:betree_insert_sub(Betree, Sub3),
     erl_betree:betree_write_dot(Betree, "test/betree_search_tests.dot"),
-    {Res, _} = erl_betree:betree_search_ids(Betree, Event, [1, 3], 0),
-    ?assertEqual({ok, [1, 3]}, Res).
+    {Res, _} = erl_betree:betree_search(Betree, Event, 0),
+    ?assertEqual({ok, [1, 2, 3]}, Res),
+    {Res1, _} = erl_betree:betree_search_ids(Betree, Event, [1, 3], 0),
+    ?assertEqual({ok, [1, 3]}, Res1),
+    {Res2, _} = erl_betree:betree_search_ids(Betree, Event, [1], 0),
+    ?assertEqual({ok, [1]}, Res2),
+    {Res3, _} = erl_betree:betree_search_ids(Betree, Event, [3], 0),
+    ?assertEqual({ok, [3]}, Res3).
