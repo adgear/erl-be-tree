@@ -4,3 +4,10 @@ tags
 c_src/*.o
 c_src/compile_commands.json
 be-tree/*
+
+.idea
+cmake-build-debug
+**/*.txt
+*.beam
+be-tree*/
+saved
