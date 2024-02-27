@@ -19,6 +19,8 @@
 
 betree_make(Domains) ->
     erl_betree_nif:betree_make(Domains).
+betree_make_event({_, Betree}, Event) ->
+    erl_betree_nif:betree_make_event(Betree, Event);
 betree_make_event(Betree, Event) ->
     erl_betree_nif:betree_make_event(Betree, Event).
 betree_make_sub(Betree, SubId, Constants, Expr) ->
