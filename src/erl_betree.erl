@@ -2,11 +2,14 @@
 
 -export([
     betree_make/1,
+    betree_make_event/2,
     betree_make_sub/4,
     betree_insert_sub/2,
     betree_exists/2,
     betree_search/2,
     betree_search/3,
+    betree_search_evt/3,
+    betree_search_evt/4,
     betree_search_ids/3,
     betree_search_ids/4,
     betree_write_dot/2
@@ -16,6 +19,8 @@
 
 betree_make(Domains) ->
     erl_betree_nif:betree_make(Domains).
+betree_make_event(Betree, Event) ->
+    erl_betree_nif:betree_make_event(Betree, Event).
 betree_make_sub(Betree, SubId, Constants, Expr) ->
     erl_betree_nif:betree_make_sub(Betree, SubId, Constants, Expr).
 betree_insert_sub(Betree, Sub) ->
@@ -29,6 +34,12 @@ betree_search(Betree, Event) ->
 % Time value is in microseconds - the erlang:timestamp resolution.  
 betree_search(Betree, Event, CLockType) ->
     erl_betree_nif:betree_search(Betree, Event, check_clock_type(CLockType)).
+betree_search_evt(Betree, Event, CLockType) ->
+    erl_betree_nif:betree_search_evt(Betree, Event, check_clock_type(CLockType)).
+betree_search_evt(_Betree, _Event, [], _CLockType) ->
+    {0, []};
+betree_search_evt(Betree, Event, Ids, CLockType) ->
+    erl_betree_nif:betree_search_evt(Betree, Event, Ids, check_clock_type(CLockType)).
 
 betree_write_dot(Betree, FileName) when is_list(FileName) ->
     erl_betree_nif:betree_write_dot(Betree, FileName).

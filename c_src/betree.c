@@ -44,6 +44,7 @@ static ERL_NIF_TERM atom_unknown;
 
 static ErlNifResourceType* MEM_BETREE;
 static ErlNifResourceType* MEM_SUB;
+static ErlNifResourceType* MEM_EVENT;
 
 struct sub {
     const struct betree_sub* sub;
@@ -113,6 +114,10 @@ static int load(ErlNifEnv* env, void **priv_data, ERL_NIF_TERM load_info)
     if(MEM_SUB == NULL) {
         return -1;
     }
+    MEM_EVENT = enif_open_resource_type(env, NULL, "event", NULL, flags, NULL);
+    if(MEM_EVENT == NULL) {
+        return -1;
+    }
 
     return 0;
 }
@@ -122,6 +127,13 @@ static struct betree* get_betree(ErlNifEnv* env, const ERL_NIF_TERM term)
     struct betree* betree = NULL;
     enif_get_resource(env, term, MEM_BETREE, (void*)&betree);
     return betree;
+}
+
+static struct betree* get_betree_event(ErlNifEnv* env, const ERL_NIF_TERM term)
+{
+    struct betree_event* event = NULL;
+    enif_get_resource(env, term, MEM_EVENT, (void*)&event);
+    return event;
 }
 
 static struct sub* get_sub(ErlNifEnv* env, const ERL_NIF_TERM term)
@@ -884,6 +896,147 @@ static ERL_NIF_TERM nif_betree_search_t(ErlNifEnv* env, int argc, const ERL_NIF_
     return retval;
 }
 
+static ERL_NIF_TERM nif_betree_search_evt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    ERL_NIF_TERM retval;
+    struct report* report = NULL;
+    int clock_type = 0;
+
+    if(argc != 3) {
+        retval = enif_make_badarg(env);
+        goto cleanup;
+    }
+
+    if (!enif_get_int(env, argv[2], &clock_type)) {
+	    return enif_make_badarg(env);
+    }
+    struct timespec start, done;
+    clock_gettime(clock_type, &start);
+
+    struct betree* betree = get_betree(env, argv[0]);
+    if(betree == NULL) {
+        retval = enif_make_badarg(env);
+        goto cleanup;
+    }
+
+    struct betree_event* event = get_betree_event(env, argv[1]);
+    if(event == NULL) {
+        retval = enif_make_badarg(env);
+        goto cleanup;
+    }
+
+    report = make_report();
+    bool result = betree_search_with_event(betree, event, report);
+
+    if(result == false) {
+        retval = enif_make_badarg(env);
+        goto cleanup;
+    }
+
+    ERL_NIF_TERM res = enif_make_list(env, 0);
+
+	for (size_t i = report->matched; i;) {
+		i--;
+		res = enif_make_list_cell(env, enif_make_uint64(env, report->subs[i]), res);
+	}
+
+    retval = enif_make_tuple2(env, atom_ok, res);
+cleanup:
+    if(report != NULL) {
+        free_report(report);
+    }
+    clock_gettime(clock_type, &done);
+    // Convert to microseconds
+    ErlNifSInt64 tspent = (done.tv_sec - start.tv_sec) * 1000000 + (done.tv_nsec - start.tv_nsec) / 1000;
+    ERL_NIF_TERM etspent = enif_make_int64(env, tspent);
+    return enif_make_tuple2(env, retval, etspent);
+}
+
+static ERL_NIF_TERM nif_betree_search_evt_ids(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    ERL_NIF_TERM retval;
+    struct report* report = NULL;
+    uint64_t * ids = NULL;
+    int clock_type = 0;
+
+    if(argc != 4) {
+        retval = enif_make_badarg(env);
+        goto cleanup;
+    }
+
+    if (!enif_get_int(env, argv[3], &clock_type)) {
+	    return enif_make_badarg(env);
+    }
+    struct timespec start, done;
+    clock_gettime(clock_type, &start);
+
+    struct betree* betree = get_betree(env, argv[0]);
+    if(betree == NULL) {
+        retval = enif_make_badarg(env);
+        goto cleanup;
+    }
+
+    struct betree_event* event = get_betree_event(env, argv[1]);
+    if(event == NULL) {
+        retval = enif_make_badarg(env);
+        goto cleanup;
+    }
+
+    unsigned int sz;
+    if(!enif_get_list_length(env, argv[2], &sz) || sz == 0) {
+        retval = enif_make_badarg(env);
+        goto cleanup;
+    }
+
+    ERL_NIF_TERM head;
+    ERL_NIF_TERM tail = argv[2];
+    ids = enif_alloc(sz * sizeof(uint64_t));
+
+    for(unsigned int i = 0; i < sz; i++) {
+        if(!enif_get_list_cell(env, tail, &head, &tail)) {
+            retval = enif_make_badarg(env);
+            goto cleanup;
+        }
+
+        if(!enif_get_uint64(env, head, &ids[i])) {
+            retval = enif_make_badarg(env);
+            goto cleanup;
+        }
+    }
+
+    report = make_report();
+    bool result = betree_search_with_event_ids(betree, event, report, ids, sz);
+    
+
+    if(result == false) {
+        retval = enif_make_badarg(env);
+        goto cleanup;
+    }
+
+    ERL_NIF_TERM res = enif_make_list(env, 0);
+
+	for (size_t i = report->matched; i;) {
+		i--;
+		res = enif_make_list_cell(env, enif_make_uint64(env, report->subs[i]), res);
+	}
+
+    retval = enif_make_tuple2(env, atom_ok, res);
+cleanup:
+    if(report != NULL) {
+        free_report(report);
+    }
+    if(ids != NULL)  {
+        enif_free((void *) ids);
+    }
+
+    clock_gettime(clock_type, &done);
+    // Convert to microseconds
+    ErlNifSInt64 tspent = (done.tv_sec - start.tv_sec) * 1000000 + (done.tv_nsec - start.tv_nsec) / 1000;
+    ERL_NIF_TERM etspent = enif_make_int64(env, tspent);
+    return enif_make_tuple2(env, retval, etspent);
+}
+
+
 static ERL_NIF_TERM nif_betree_search_ids(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
     ERL_NIF_TERM retval;
@@ -891,14 +1044,13 @@ static ERL_NIF_TERM nif_betree_search_ids(ErlNifEnv* env, int argc, const ERL_NI
     size_t pred_index = 0;
     struct betree_event* event = NULL;
     uint64_t * ids = NULL;
-
+    int clock_type = 0;
 
     if(argc != 4) {
         retval = enif_make_badarg(env);
         goto cleanup;
     }
 
-    int clock_type;
     if (!enif_get_int(env, argv[3], &clock_type)) {
 	    return enif_make_badarg(env);
     }
@@ -997,7 +1149,6 @@ cleanup:
     ErlNifSInt64 tspent = (done.tv_sec - start.tv_sec) * 1000000 + (done.tv_nsec - start.tv_nsec) / 1000;
     ERL_NIF_TERM etspent = enif_make_int64(env, tspent);
     return enif_make_tuple2(env, retval, etspent);
-    // return retval;
 }
 
 static ERL_NIF_TERM nif_betree_exists(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
@@ -1080,6 +1231,61 @@ static ERL_NIF_TERM betree_write_dot(ErlNifEnv* env, int argc, const ERL_NIF_TER
     return enif_make_atom(env, "ok");    
 }
 
+static ERL_NIF_TERM nif_betree_make_event(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    ERL_NIF_TERM retval;
+    if(argc != 2) {
+        retval = enif_make_badarg(env);
+        goto cleanup;
+    }
+    struct betree* betree = get_betree(env, argv[0]);
+    if(betree == NULL) {
+        retval = enif_make_badarg(env);
+        goto cleanup;
+    }
+
+    unsigned int list_len;
+    if(!enif_get_list_length(env, argv[1], &list_len)) {
+        retval = enif_make_badarg(env);
+        goto cleanup;
+    }
+
+    struct betree_event* event = enif_alloc_resource(MEM_EVENT, sizeof(*event));
+    betree_init_event(betree, event);
+    ERL_NIF_TERM erl_event = enif_make_resource(env, event);
+    enif_release_resource(event);
+
+    ERL_NIF_TERM head;
+    ERL_NIF_TERM tail = argv[1];
+    const ERL_NIF_TERM* tuple;
+
+    size_t pred_index = 0;
+    int tuple_len;
+
+    for(unsigned int i = 0; i < list_len; i++) {
+        if(!enif_get_list_cell(env, tail, &head, &tail)) {
+            retval = enif_make_badarg(env);
+            goto cleanup;
+        }
+
+        if(!enif_get_tuple(env, head, &tuple_len, &tuple)) {
+            retval = enif_make_badarg(env);
+            goto cleanup;
+        }
+
+        if(!add_variables(env, betree, event, tuple, tuple_len, pred_index)) {
+            retval = enif_make_badarg(env);
+            goto cleanup;
+        }
+        pred_index += (tuple_len - 1);
+    }
+
+    retval = enif_make_tuple(env, 2, atom_ok, erl_event);
+
+cleanup:
+    return retval;
+}
+
 /*static ERL_NIF_TERM nif_betree_delete(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])*/
 /*{*/
     /*ERL_NIF_TERM retval;*/
@@ -1110,7 +1316,10 @@ static ErlNifFunc nif_functions[] = {
     {"betree_exists", 2, nif_betree_exists, 0},
     {"betree_search", 2, nif_betree_search, 0},
     {"betree_search", 3, nif_betree_search_t, 0},
+    {"betree_search_evt", 3, nif_betree_search_evt, 0},
+    {"betree_search_evt", 4, nif_betree_search_evt_ids, 0},
     {"betree_search_ids", 4, nif_betree_search_ids, 0},
+    {"betree_make_event", 2, nif_betree_make_event, 0},
     {"betree_write_dot", 2, betree_write_dot, ERL_DIRTY_JOB_IO_BOUND}
     /*{"betree_delete", 2, nif_betree_delete, 0}*/
 };
