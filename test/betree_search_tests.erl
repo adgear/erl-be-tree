@@ -188,15 +188,19 @@ atom_event_search_term_test() ->
 
       {ok, Evt} = erl_betree:betree_make_event(Betree, Event),
 
-      {Res0, _} = erl_betree:betree_search_evt(Betree, Evt, 0),
+      {Res0, _} = erl_betree:betree_search(Betree, Evt, 0),
       ?assertEqual({ok, [1, 2, 3]}, Res0),
-      {Res, _} = erl_betree:betree_search_evt(Betree, Evt, [1, 2, 3], 0),
+      {Res, _} = erl_betree:betree_search_ids(Betree, Evt, [1, 2, 3], 0),
       ?assertEqual({ok, [1, 2, 3]}, Res),
-      {Res1, _} = erl_betree:betree_search_evt(Betree, Evt, [1, 3], 0),
+      {Res1, _} = erl_betree:betree_search_ids(Betree, Evt, [1, 3], 0),
       ?assertEqual({ok, [1, 3]}, Res1),
       {Res2, _} = erl_betree:betree_search_ids(Betree, Event, [1], 0),
       ?assertEqual({ok, [1]}, Res2),
       {Res3, _} = erl_betree:betree_search_ids(Betree, Event, [3], 0),
+      ?assertEqual({ok, [3]}, Res3),
+      {Res2, _} = erl_betree:betree_search_ids(Betree, Evt, [1], 0),
+      ?assertEqual({ok, [1]}, Res2),
+      {Res3, _} = erl_betree:betree_search_ids(Betree, Evt, [3], 0),
       ?assertEqual({ok, [3]}, Res3),
       ok.
   
