@@ -5,7 +5,7 @@
 
 -export([
     betree_make/1,
-    betree_make_event/2,
+    betree_make_event/3,
     betree_make_sub/4,
     betree_insert_sub/2,
     betree_exists/2,
@@ -40,7 +40,7 @@ nif_stub_error(Line) ->
 
 betree_make(_Domains) ->
     ?nif_stub.
-betree_make_event(_Betree, _Event) ->
+betree_make_event(_Betree, _Event, _ClockType) ->
     ?nif_stub.
 betree_make_sub(_Betree, _SubId, _Constants, _Expr) ->
     ?nif_stub.

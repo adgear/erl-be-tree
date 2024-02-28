@@ -3,6 +3,7 @@
 -export([
     betree_make/1,
     betree_make_event/2,
+    betree_make_event/3,
     betree_make_sub/4,
     betree_insert_sub/2,
     betree_exists/2,
@@ -15,12 +16,20 @@
 
 -inline([check_clock_type/1]).
 
+-define(CLOCK_REALTIME, 0). 
+-define(CLOCK_MONOTONIC, 6). 
+-define(CLOCK_PROCESS_CPUTIME_ID, 12). 
+-define(CLOCK_THREAD_CPUTIME_ID, 16). 
+
 betree_make(Domains) ->
     erl_betree_nif:betree_make(Domains).
-betree_make_event({_, Betree}, Event) ->
-    erl_betree_nif:betree_make_event(Betree, Event);
 betree_make_event(Betree, Event) ->
-    erl_betree_nif:betree_make_event(Betree, Event).
+    betree_make_event(Betree, Event, ?CLOCK_MONOTONIC).
+
+betree_make_event({_, Betree}, Event, CLockType) ->
+    erl_betree_nif:betree_make_event(Betree, Event, check_clock_type(CLockType));
+betree_make_event(Betree, Event, CLockType) ->
+    erl_betree_nif:betree_make_event(Betree, Event, check_clock_type(CLockType)).
 betree_make_sub(Betree, SubId, Constants, Expr) ->
     erl_betree_nif:betree_make_sub(Betree, SubId, Constants, Expr).
 betree_insert_sub(Betree, Sub) ->
@@ -39,11 +48,6 @@ betree_search(Betree, Event, CLockType) when is_reference(Event) ->
 
 betree_write_dot(Betree, FileName) when is_list(FileName) ->
     erl_betree_nif:betree_write_dot(Betree, FileName).
-
--define(CLOCK_REALTIME, 0). 
--define(CLOCK_MONOTONIC, 6). 
--define(CLOCK_PROCESS_CPUTIME_ID, 12). 
--define(CLOCK_THREAD_CPUTIME_ID, 16). 
 
 betree_search_ids(Betree, Event, Ids) ->
     betree_search_ids(Betree, Event, Ids, ?CLOCK_MONOTONIC). 

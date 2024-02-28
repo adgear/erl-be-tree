@@ -1234,10 +1234,19 @@ static ERL_NIF_TERM betree_write_dot(ErlNifEnv* env, int argc, const ERL_NIF_TER
 static ERL_NIF_TERM nif_betree_make_event(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
     ERL_NIF_TERM retval;
-    if(argc != 2) {
+    int clock_type = 0;
+
+    if(argc != 3) {
         retval = enif_make_badarg(env);
         goto cleanup;
     }
+
+    if (!enif_get_int(env, argv[2], &clock_type)) {
+	    return enif_make_badarg(env);
+    }
+    struct timespec start, done;
+    clock_gettime(clock_type, &start);
+
     struct betree* betree = get_betree(env, argv[0]);
     if(betree == NULL) {
         retval = enif_make_badarg(env);
@@ -1283,7 +1292,11 @@ static ERL_NIF_TERM nif_betree_make_event(ErlNifEnv* env, int argc, const ERL_NI
     retval = enif_make_tuple(env, 2, atom_ok, erl_event);
 
 cleanup:
-    return retval;
+    clock_gettime(clock_type, &done);
+    // Convert to microseconds
+    ErlNifSInt64 tspent = (done.tv_sec - start.tv_sec) * 1000000 + (done.tv_nsec - start.tv_nsec) / 1000;
+    ERL_NIF_TERM etspent = enif_make_int64(env, tspent);
+    return enif_make_tuple2(env, retval, etspent);
 }
 
 /*static ERL_NIF_TERM nif_betree_delete(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])*/
@@ -1311,6 +1324,7 @@ cleanup:
 
 static ErlNifFunc nif_functions[] = {
     {"betree_make", 1, nif_betree_make, 0},
+    {"betree_make_event", 3, nif_betree_make_event, 0},
     {"betree_make_sub", 4, nif_betree_make_sub, 0},
     {"betree_insert_sub", 2, nif_betree_insert_sub, 0},
     {"betree_exists", 2, nif_betree_exists, 0},
@@ -1319,7 +1333,6 @@ static ErlNifFunc nif_functions[] = {
     {"betree_search_evt", 3, nif_betree_search_evt, 0},
     {"betree_search_evt", 4, nif_betree_search_evt_ids, 0},
     {"betree_search_ids", 4, nif_betree_search_ids, 0},
-    {"betree_make_event", 2, nif_betree_make_event, 0},
     {"betree_write_dot", 2, betree_write_dot, ERL_DIRTY_JOB_IO_BOUND}
     /*{"betree_delete", 2, nif_betree_delete, 0}*/
 };

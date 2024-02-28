@@ -186,7 +186,7 @@ atom_event_search_term_test() ->
       {ok, Sub3} = erl_betree:betree_make_sub(Betree, 3, Consts, Expr2),
       ok = erl_betree:betree_insert_sub(Betree, Sub3),
 
-      {ok, Evt} = erl_betree:betree_make_event(Betree, Event),
+      {{ok, Evt}, _} = erl_betree:betree_make_event(Betree, Event),
 
       {Res0, _} = erl_betree:betree_search(Betree, Evt, 0),
       ?assertEqual({ok, [1, 2, 3]}, Res0),
