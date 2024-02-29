@@ -50,6 +50,10 @@ struct sub {
     const struct betree_sub* sub;
 };
 
+struct evt {
+    struct betree_event* event;
+};
+
 static ERL_NIF_TERM make_atom(ErlNifEnv* env, const char* name)
 {
     ERL_NIF_TERM ret;
@@ -68,6 +72,15 @@ static void cleanup_betree(ErlNifEnv* env, void* obj)
     betree_deinit(betree);
 }
 
+static void cleanup_event(ErlNifEnv* env, void* obj)
+{
+    (void)env;
+    struct evt* evt = obj;
+    // fprintf(stderr, "%s before betree_free_event\n", __func__);
+    betree_free_event(evt->event);
+    evt->event = NULL;
+    // fprintf(stderr, "%s after betree_free_event\n", __func__);
+}
 
 static int load(ErlNifEnv* env, void **priv_data, ERL_NIF_TERM load_info)
 {
@@ -114,7 +127,7 @@ static int load(ErlNifEnv* env, void **priv_data, ERL_NIF_TERM load_info)
     if(MEM_SUB == NULL) {
         return -1;
     }
-    MEM_EVENT = enif_open_resource_type(env, NULL, "event", NULL, flags, NULL);
+    MEM_EVENT = enif_open_resource_type(env, NULL, "event", cleanup_event, flags, NULL);
     if(MEM_EVENT == NULL) {
         return -1;
     }
@@ -129,11 +142,11 @@ static struct betree* get_betree(ErlNifEnv* env, const ERL_NIF_TERM term)
     return betree;
 }
 
-static struct betree* get_betree_event(ErlNifEnv* env, const ERL_NIF_TERM term)
+static struct evt* get_evt(ErlNifEnv* env, const ERL_NIF_TERM term)
 {
-    struct betree_event* event = NULL;
-    enif_get_resource(env, term, MEM_EVENT, (void*)&event);
-    return event;
+    struct evt* evt = NULL;
+    enif_get_resource(env, term, MEM_EVENT, (void*)&evt);
+    return evt;
 }
 
 static struct sub* get_sub(ErlNifEnv* env, const ERL_NIF_TERM term)
@@ -919,11 +932,12 @@ static ERL_NIF_TERM nif_betree_search_evt(ErlNifEnv* env, int argc, const ERL_NI
         goto cleanup;
     }
 
-    struct betree_event* event = get_betree_event(env, argv[1]);
-    if(event == NULL) {
+    struct evt* evt = get_evt(env, argv[1]);
+    if(evt == NULL) {
         retval = enif_make_badarg(env);
         goto cleanup;
     }
+    struct betree_event* event = evt->event;
 
     report = make_report();
     bool result = betree_search_with_event(betree, event, report);
@@ -976,11 +990,12 @@ static ERL_NIF_TERM nif_betree_search_evt_ids(ErlNifEnv* env, int argc, const ER
         goto cleanup;
     }
 
-    struct betree_event* event = get_betree_event(env, argv[1]);
-    if(event == NULL) {
+    struct evt* evt = get_evt(env, argv[1]);
+    if(evt == NULL) {
         retval = enif_make_badarg(env);
         goto cleanup;
     }
+    struct betree_event* event = evt->event;
 
     unsigned int sz;
     if(!enif_get_list_length(env, argv[2], &sz) || sz == 0) {
@@ -1235,6 +1250,7 @@ static ERL_NIF_TERM nif_betree_make_event(ErlNifEnv* env, int argc, const ERL_NI
 {
     ERL_NIF_TERM retval;
     int clock_type = 0;
+    struct betree_event* event = NULL;
 
     if(argc != 3) {
         retval = enif_make_badarg(env);
@@ -1259,11 +1275,14 @@ static ERL_NIF_TERM nif_betree_make_event(ErlNifEnv* env, int argc, const ERL_NI
         goto cleanup;
     }
 
-    struct betree_event* event = enif_alloc_resource(MEM_EVENT, sizeof(*event));
-    betree_init_event(betree, event);
-    ERL_NIF_TERM erl_event = enif_make_resource(env, event);
-    enif_release_resource(event);
-
+    struct evt* evt = enif_alloc_resource(MEM_EVENT, sizeof(*evt));
+    if (evt == NULL) {
+        retval = enif_make_badarg(env);
+        goto cleanup;
+    }
+    evt->event = event = betree_make_event(betree);
+    ERL_NIF_TERM erl_event = enif_make_resource(env, evt);
+    
     ERL_NIF_TERM head;
     ERL_NIF_TERM tail = argv[1];
     const ERL_NIF_TERM* tuple;
@@ -1292,6 +1311,9 @@ static ERL_NIF_TERM nif_betree_make_event(ErlNifEnv* env, int argc, const ERL_NI
     retval = enif_make_tuple(env, 2, atom_ok, erl_event);
 
 cleanup:
+    if (evt != NULL) {
+        enif_release_resource(evt);
+    }
     clock_gettime(clock_type, &done);
     // Convert to microseconds
     ErlNifSInt64 tspent = (done.tv_sec - start.tv_sec) * 1000000 + (done.tv_nsec - start.tv_nsec) / 1000;
