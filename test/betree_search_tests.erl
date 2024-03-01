@@ -179,11 +179,11 @@ atom_event_search_term_test() ->
                  now = 0
                 }],
       {ok, Betree} = erl_betree:betree_make(Domains),
-      {ok, Sub1} = erl_betree:betree_make_sub(Betree, 1, Consts, Expr1),
+      {ok, Sub1} = erl_betree:betree_make_sub(Betree, 3, Consts, Expr1),
       ok = erl_betree:betree_insert_sub(Betree, Sub1),
       {ok, Sub2} = erl_betree:betree_make_sub(Betree, 2, Consts, Expr2),
       ok = erl_betree:betree_insert_sub(Betree, Sub2),
-      {ok, Sub3} = erl_betree:betree_make_sub(Betree, 3, Consts, Expr2),
+      {ok, Sub3} = erl_betree:betree_make_sub(Betree, 1, Consts, Expr2),
       ok = erl_betree:betree_insert_sub(Betree, Sub3),
 
       {{ok, Evt}, _} = erl_betree:betree_make_event(Betree, Event),

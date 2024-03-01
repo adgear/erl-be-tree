@@ -54,6 +54,9 @@ struct evt {
     struct betree_event* event;
 };
 
+static ERL_NIF_TERM ids_from_report(ErlNifEnv* env, const struct report* report);
+static ERL_NIF_TERM make_time(ErlNifEnv* env, const struct timespec* start, const struct timespec* done);
+
 static ERL_NIF_TERM make_atom(ErlNifEnv* env, const char* name)
 {
     ERL_NIF_TERM ret;
@@ -76,10 +79,8 @@ static void cleanup_event(ErlNifEnv* env, void* obj)
 {
     (void)env;
     struct evt* evt = obj;
-    // fprintf(stderr, "%s before betree_free_event\n", __func__);
     betree_free_event(evt->event);
     evt->event = NULL;
-    // fprintf(stderr, "%s after betree_free_event\n", __func__);
 }
 
 static int load(ErlNifEnv* env, void **priv_data, ERL_NIF_TERM load_info)
@@ -867,12 +868,7 @@ static ERL_NIF_TERM nif_betree_search(ErlNifEnv* env, int argc, const ERL_NIF_TE
         goto cleanup;
     }
 
-    ERL_NIF_TERM res = enif_make_list(env, 0);
-
-	for (size_t i = report->matched; i;) {
-		i--;
-		res = enif_make_list_cell(env, enif_make_uint64(env, report->subs[i]), res);
-	}
+    ERL_NIF_TERM res = ids_from_report(env, report);
 
     retval = enif_make_tuple2(env, atom_ok, res);
 cleanup:
@@ -902,9 +898,7 @@ static ERL_NIF_TERM nif_betree_search_t(ErlNifEnv* env, int argc, const ERL_NIF_
         return search_res;
     }
     clock_gettime(clock_type, &done);
-    // Convert to microseconds
-    ErlNifSInt64 tspent = (done.tv_sec - start.tv_sec) * 1000000 + (done.tv_nsec - start.tv_nsec) / 1000;
-    ERL_NIF_TERM etspent = enif_make_int64(env, tspent);
+    ERL_NIF_TERM etspent = make_time(env, &start, &done);
     ERL_NIF_TERM retval = enif_make_tuple2(env, search_res, etspent);
     return retval;
 }
@@ -947,12 +941,7 @@ static ERL_NIF_TERM nif_betree_search_evt(ErlNifEnv* env, int argc, const ERL_NI
         goto cleanup;
     }
 
-    ERL_NIF_TERM res = enif_make_list(env, 0);
-
-	for (size_t i = report->matched; i;) {
-		i--;
-		res = enif_make_list_cell(env, enif_make_uint64(env, report->subs[i]), res);
-	}
+    ERL_NIF_TERM res = ids_from_report(env, report);
 
     retval = enif_make_tuple2(env, atom_ok, res);
 cleanup:
@@ -960,9 +949,7 @@ cleanup:
         free_report(report);
     }
     clock_gettime(clock_type, &done);
-    // Convert to microseconds
-    ErlNifSInt64 tspent = (done.tv_sec - start.tv_sec) * 1000000 + (done.tv_nsec - start.tv_nsec) / 1000;
-    ERL_NIF_TERM etspent = enif_make_int64(env, tspent);
+    ERL_NIF_TERM etspent = make_time(env, &start, &done);
     return enif_make_tuple2(env, retval, etspent);
 }
 
@@ -1028,12 +1015,7 @@ static ERL_NIF_TERM nif_betree_search_evt_ids(ErlNifEnv* env, int argc, const ER
         goto cleanup;
     }
 
-    ERL_NIF_TERM res = enif_make_list(env, 0);
-
-	for (size_t i = report->matched; i;) {
-		i--;
-		res = enif_make_list_cell(env, enif_make_uint64(env, report->subs[i]), res);
-	}
+    ERL_NIF_TERM res = ids_from_report(env, report);
 
     retval = enif_make_tuple2(env, atom_ok, res);
 cleanup:
@@ -1045,9 +1027,7 @@ cleanup:
     }
 
     clock_gettime(clock_type, &done);
-    // Convert to microseconds
-    ErlNifSInt64 tspent = (done.tv_sec - start.tv_sec) * 1000000 + (done.tv_nsec - start.tv_nsec) / 1000;
-    ERL_NIF_TERM etspent = enif_make_int64(env, tspent);
+    ERL_NIF_TERM etspent = make_time(env, &start, &done);
     return enif_make_tuple2(env, retval, etspent);
 }
 
@@ -1139,12 +1119,7 @@ static ERL_NIF_TERM nif_betree_search_ids(ErlNifEnv* env, int argc, const ERL_NI
         goto cleanup;
     }
 
-    ERL_NIF_TERM res = enif_make_list(env, 0);
-
-	for (size_t i = report->matched; i;) {
-		i--;
-		res = enif_make_list_cell(env, enif_make_uint64(env, report->subs[i]), res);
-	}
+    ERL_NIF_TERM res = ids_from_report(env, report);
 
     retval = enif_make_tuple2(env, atom_ok, res);
 
@@ -1160,9 +1135,7 @@ cleanup:
     }
 
     clock_gettime(clock_type, &done);
-    // Convert to microseconds
-    ErlNifSInt64 tspent = (done.tv_sec - start.tv_sec) * 1000000 + (done.tv_nsec - start.tv_nsec) / 1000;
-    ERL_NIF_TERM etspent = enif_make_int64(env, tspent);
+    ERL_NIF_TERM etspent = make_time(env, &start, &done);
     return enif_make_tuple2(env, retval, etspent);
 }
 
@@ -1251,6 +1224,7 @@ static ERL_NIF_TERM nif_betree_make_event(ErlNifEnv* env, int argc, const ERL_NI
     ERL_NIF_TERM retval;
     int clock_type = 0;
     struct betree_event* event = NULL;
+    struct evt* evt = NULL;
 
     if(argc != 3) {
         retval = enif_make_badarg(env);
@@ -1275,7 +1249,7 @@ static ERL_NIF_TERM nif_betree_make_event(ErlNifEnv* env, int argc, const ERL_NI
         goto cleanup;
     }
 
-    struct evt* evt = enif_alloc_resource(MEM_EVENT, sizeof(*evt));
+    evt = enif_alloc_resource(MEM_EVENT, sizeof(*evt));
     if (evt == NULL) {
         retval = enif_make_badarg(env);
         goto cleanup;
@@ -1315,10 +1289,43 @@ cleanup:
         enif_release_resource(evt);
     }
     clock_gettime(clock_type, &done);
-    // Convert to microseconds
-    ErlNifSInt64 tspent = (done.tv_sec - start.tv_sec) * 1000000 + (done.tv_nsec - start.tv_nsec) / 1000;
-    ERL_NIF_TERM etspent = enif_make_int64(env, tspent);
+    ERL_NIF_TERM etspent = make_time(env, &start, &done);
     return enif_make_tuple2(env, retval, etspent);
+}
+
+// Convert to microseconds
+static ERL_NIF_TERM make_time(ErlNifEnv* env, const struct timespec* start, const struct timespec* done) {
+    ErlNifSInt64 tspent = (done->tv_sec - start->tv_sec) * 1000000 + (done->tv_nsec - start->tv_nsec) / 1000;
+    ERL_NIF_TERM etspent = enif_make_int64(env, tspent);
+    return etspent;
+}
+
+static int cmpfunc(const void * a, const void * b) {
+    uint64_t f = *((uint64_t*)a);
+    uint64_t s = *((uint64_t*)b);
+    if (f > s) return  1;
+    if (f < s) return -1;
+    return 0;
+}
+
+static ERL_NIF_TERM ids_from_report(ErlNifEnv* env, const struct report* report) {
+    ERL_NIF_TERM res = enif_make_list(env, 0);
+    size_t sz = report->matched;
+    if(sz > 0){
+        uint64_t * ids = enif_alloc(sz * sizeof(uint64_t));
+        if (ids == NULL) return res;
+        for (size_t i = sz; i;) {
+		    i--;
+            ids[i] = report->subs[i];
+        }
+        qsort(ids, sz, sizeof(uint64_t), cmpfunc);
+        for (size_t i = sz; i;) {
+		    i--;
+            res = enif_make_list_cell(env, enif_make_uint64(env, ids[i]), res);
+        }
+        enif_free((void *) ids);
+	}
+    return res;
 }
 
 /*static ERL_NIF_TERM nif_betree_delete(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])*/
@@ -1360,4 +1367,3 @@ static ErlNifFunc nif_functions[] = {
 };
 
 ERL_NIF_INIT(erl_betree_nif, nif_functions, &load, NULL, NULL, NULL);
-
