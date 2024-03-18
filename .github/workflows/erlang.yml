@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  workflow_dispatch:
+    inputs:
+      erlang:
+        description: Erlang OTP version to test
+        default: '26.0.2.0-slim'
+        required: false
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  checks:
+    runs-on: [self-hosted, ubuntu-22.04-medium]
+    strategy:
+      matrix:
+        erlang: [26]
+    container:
+      image: erlang:${{ matrix.erlang }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Cache
+      uses: actions/cache@v2
+      env:
+        cache-name: rebar3
+      with:
+        path: |
+          ~/.cache/rebar3
+          _build
+        key: ci-${{runner.os}}-${{env.cache-name}}-erlang_${{matrix.erlang}}-rebar3-${{hashFiles('rebar.lock')}}
+        restore-keys: |
+          ci-${{runner.os}}-${{env.cache-name}}-erlang_${{matrix.erlang}}-rebar3
+          ci-${{runner.os}}-${{env.cache-name}}-erlang_${{matrix.erlang}}
+
+    - name: Get GitHub token
+      id: get_token
+      uses: getsentry/action-github-app-token@v2
+      with:
+        private_key: ${{ secrets.PRIVATE_REPO_APP_PEM_RAW }}
+        app_id: ${{ secrets.PRIVATE_REPO_APP_ID }}
+
+    - name: Setup private repo access
+      run: |
+        git config --global url."https://oauth2:${GITHUB_TOKEN}@github.com/adgear".insteadOf "https://github.com/adgear"
+        git config --global --add url."https://oauth2:${GITHUB_TOKEN}@github.com/".insteadOf "ssh://git@github.com:"
+        git config --global --add url."https://oauth2:${GITHUB_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
+        git config --global --add url."https://oauth2:${GITHUB_TOKEN}@github.com/".insteadOf "git@github.com:"
+        git config --global --add url."https://oauth2:${GITHUB_TOKEN}@github.com/".insteadOf "git@github.com/"
+      env:
+        GITHUB_TOKEN: ${{ steps.get_token.outputs.token }}
+
+    - name: Compile
+      run: |
+        ./rebar3 compile
+
+    - name: Check
+      run: |
+        ./rebar3 xref
+        ./rebar3 dialyzer
+        ./rebar3 eunit
