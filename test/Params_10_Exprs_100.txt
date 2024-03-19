@@ -1,0 +1,110 @@
+[{par1,bool,disallow_undefined},
+ {par2,bool,disallow_undefined},
+ {par3,bool,disallow_undefined},
+ {par4,bool,disallow_undefined},
+ {par5,bool,disallow_undefined},
+ {par6,bool,disallow_undefined},
+ {par7,bool,disallow_undefined},
+ {par8,bool,disallow_undefined},
+ {par9,bool,disallow_undefined},
+ {par10,bool,disallow_undefined}].
+<<"((par2 and ((par3 or (par7 or par1)) or (par5 and (par9 and (par8 and par10))))) or par6) or (not par4)">>.
+<<"(((par7 or par6) or par1) or (not (par10 or par5))) or (not (((par3 or par4) or par2) or ((not par8) and par9)))">>.
+<<"((not par3) or ((not par10) or par5)) or ((par7 or par8) or (((par6 or (par1 and par9)) and par4) or par2))">>.
+<<"(par5 and (par6 and par3)) or ((par9 or ((par8 or par4) or par1)) and ((par7 and par2) and par10))">>.
+<<"(((not (par5 or par3)) or (par9 or par4)) and ((par7 and par2) and (((not par10) or par8) and par1))) or (not par6)">>.
+<<"((par6 or par4) and ((((par3 and (par8 or par5)) and par2) or (par1 or par7)) or (not (not par10)))) and (not par9)">>.
+<<"(not (((par10 and par1) or par3) or (not ((par8 or par6) or par7)))) or (par2 and ((par4 or (not par5)) or par9))">>.
+<<"(not par1) or (not ((par7 or ((par10 and (not (not (par9 or par6)))) and (not par5))) and ((par4 or par8) or (par3 or (not par2)))))">>.
+<<"((not (par7 and (par9 and ((not par8) or par10)))) and ((not par3) or (par2 or (not par6)))) or (par1 or (par5 or par4))">>.
+<<"((par3 or par8) or ((par1 and (par6 and (par9 or par5))) and ((not (not (par7 or (not par2)))) and par10))) or par4">>.
+<<"((not par9) and ((not (par2 and ((par4 or par6) or par1))) or (par7 and (par8 or par3)))) or (not (par5 or par10))">>.
+<<"((par10 or par5) and (not (not (not par3)))) or ((par7 or (((not par1) or (par9 and par4)) and (par6 and par2))) or par8)">>.
+<<"((par5 or ((par9 or (par1 or par4)) and (par2 or par10))) or (not (par6 and par7))) or (par3 and (not par8))">>.
+<<"((par7 and par10) or ((par6 or (par9 or (par5 and par2))) or par8)) and (not ((par1 and par4) and par3))">>.
+<<"(((par10 and (not par8)) or (par4 or par9)) or ((par2 or par7) and par3)) and (par6 and (not (par1 and par5)))">>.
+<<"(((par6 or par10) and (par9 and par8)) and ((par4 or par7) or par5)) or ((par3 and par2) or par1)">>.
+<<"(par8 and (((par7 or par9) or ((par5 and par3) or par1)) and (par2 and par10))) and (not (par6 or par4))">>.
+<<"(par6 or (par10 or (par5 or (not par2)))) and (((par9 or par7) and (not ((par8 or par3) or par4))) or par1)">>.
+<<"(not (par1 or par8)) and ((not par7) or ((not ((par10 and par4) and par2)) or (not ((not par6) or (par9 and (par5 and par3))))))">>.
+<<"((par4 and (par9 or par8)) or (((par2 and par6) and par1) or (par10 or par5))) and (not (par3 and par7))">>.
+<<"((par2 and par10) or ((par3 and par8) and par7)) and ((par6 or par9) or ((not (par4 or par5)) or par1))">>.
+<<"(not ((((par5 or (par2 or par4)) or par10) and par6) or (par3 or par1))) or (not ((not (not par7)) or (par8 and (not par9))))">>.
+<<"((par6 and par4) and (par3 and par10)) and ((par5 or par1) or ((par2 and (par8 or par9)) and par7))">>.
+<<"(not ((par2 or par8) or (not (par4 or (par9 or par10))))) and ((par7 and par1) and (not ((par5 and par6) or par3)))">>.
+<<"((((not par4) and (par1 or par3)) and (not par6)) and (par8 and (par5 or par7))) or ((par10 and par2) and par9)">>.
+<<"(par3 and (par8 and par9)) or (((par2 or par5) or par10) or ((par6 or par7) or ((not par1) and par4)))">>.
+<<"((not ((par7 and (not ((par1 and (not par9)) and par2))) and par5)) or ((not (par6 and par10)) and par3)) and ((not par4) or par8)">>.
+<<"(par7 or par1) or (((par4 or (((not par5) or (par2 or par3)) and par10)) and (par6 and par9)) or par8)">>.
+<<"(not (not ((par6 and (par7 or par8)) or ((not par3) or (not (not par9)))))) or ((not par4) and (par5 and ((par10 or par2) or par1)))">>.
+<<"(par1 and par5) and ((((par10 or par3) and par7) and (not (par2 and par8))) and (par9 or (par4 and par6)))">>.
+<<"((par9 or par2) or ((par8 or par10) or par3)) or (not (((par6 or (not par7)) or (not (par1 or par4))) and (not (not par5))))">>.
+<<"(not ((par8 or par3) or (par4 or (par6 and par1)))) and ((((not par5) and par2) and (par7 or par10)) or par9)">>.
+<<"(not par6) and ((((not (par7 and par2)) or ((not (par8 and (par9 or par10))) and par5)) and (not par3)) and (not (par1 or par4)))">>.
+<<"(((par4 and par8) and par1) and par5) or (((par3 and par6) and (par7 and par2)) or (par10 and par9))">>.
+<<"(not par8) or ((not ((not par10) or par3)) and ((par9 and ((par4 or par7) or (par2 and par1))) and ((not par5) and par6)))">>.
+<<"(not ((par9 and par7) or (not ((par4 and par6) or (par10 or par3))))) or ((par1 and (par8 or par2)) or par5)">>.
+<<"((par7 or ((par8 or par6) and (not par5))) or (not par2)) or ((par3 or (par9 and par10)) and ((not par4) or par1))">>.
+<<"(((par7 and par9) and ((par8 or par2) or par3)) or (par5 or par1)) or (par6 and (par4 or (not (not par10))))">>.
+<<"(par3 and par4) or (par10 and ((par2 or par7) and ((not (par1 and par9)) or (par8 and (par6 and par5)))))">>.
+<<"(not ((((par3 and par4) and par8) or (par2 and par6)) or (not (par7 and par9)))) and (par1 and (par10 or par5))">>.
+<<"(par2 or (((par10 or par9) or par3) or (not ((par4 and par6) and par7)))) and (not (not (par8 or (par1 and par5))))">>.
+<<"((not (not (par2 or par6))) and ((par5 or par9) or (par8 or (par3 or par10)))) or (not ((par1 and par4) and par7))">>.
+<<"(par5 and ((par9 and par1) and ((not par2) or par3))) or (((par10 or par7) or par8) or (par6 and par4))">>.
+<<"(par4 and ((par10 and (par1 and par6)) and par9)) or ((not (not ((par3 or par8) and (par7 or (not par5))))) or par2)">>.
+<<"(par5 or par9) or (((par2 and par4) and (par3 or par6)) and ((not (par7 or par10)) and (par8 and par1)))">>.
+<<"(((not ((par6 and par5) and par4)) or (not par9)) or par1) and ((((par8 and par7) or par2) or par3) or par10)">>.
+<<"((not par10) and (not par9)) or (not ((par2 and ((par4 and par5) or (not (par7 and (par8 or par3))))) or (not (par1 or par6))))">>.
+<<"(par7 and par2) and (((par1 and par9) and par4) or ((not par3) or (par6 or ((par10 and par8) or par5))))">>.
+<<"(par8 or (par10 and par4)) or (((par1 and ((par9 or par6) and par3)) or (par2 and par7)) or par5)">>.
+<<"(not ((not par4) and par1)) and (not ((not (par5 and par9)) and (par7 or (par10 or (par6 and (par2 or (par3 and par8)))))))">>.
+<<"((((par4 or par2) and par9) or (not par7)) and (not par1)) and ((not par5) or ((par3 and par10) and (par6 and par8)))">>.
+<<"((par7 and (par4 or par8)) or ((((par10 and par6) and par1) or (par9 or par5)) and par2)) and par3">>.
+<<"(par4 and ((par3 or (not par10)) and par2)) and (not ((not par6) or ((not (par8 and par1)) or ((par9 or par5) and par7))))">>.
+<<"((((par3 and par9) and par2) or (par8 or par7)) and (par10 or par5)) and (par4 and (par1 or par6))">>.
+<<"(((par1 and par8) and (not par2)) and (par9 and (par4 and par7))) or ((par5 or par10) and (not (par3 or par6)))">>.
+<<"((par2 and (par9 and par1)) and (par10 and par6)) and (not (((not par4) and par7) and ((not (not par3)) or (par8 or par5))))">>.
+<<"par1 or (((par10 and par9) or par8) or ((par7 or par6) or ((par2 or par5) and (par4 or par3))))">>.
+<<"((par2 and par4) and (par10 and par5)) and (par7 and ((par6 or (par1 and par8)) and (par3 and (not par9))))">>.
+<<"(par6 or (((not par1) and par10) or par4)) or ((not par8) and ((not (par7 and par3)) and (par5 or (par9 or par2))))">>.
+<<"(((not (par10 or par5)) and par6) or par4) and (((par2 or par7) or ((par1 and par3) or (not par9))) or (not par8))">>.
+<<"((par10 and par1) and (par9 and (par5 or par2))) or (par8 or (not (((not par7) and par6) and (par4 or par3))))">>.
+<<"(not (not (par4 or (par10 or par2)))) and (not ((not (not par5)) or (((par1 or par6) and (par9 or (par8 or par7))) or par3)))">>.
+<<"(not par5) or ((((((par8 and par2) and par3) or (par1 or par4)) or (par10 or (not par9))) or (not par7)) or (not par6))">>.
+<<"(par3 or par5) and ((not (not (not ((par4 and par10) and par7)))) and ((par6 or par8) or (par9 or (par2 or par1))))">>.
+<<"(par5 or (not par8)) and (((not par10) and ((((par4 and par9) and par3) or par1) and par2)) or (par6 or par7))">>.
+<<"(not par1) and (((par4 or par9) and par10) or (not (par7 and (((par6 and par5) or par2) and (par8 or par3)))))">>.
+<<"(not par6) and ((par9 and (par2 or (par8 or par1))) and (par4 and ((par5 and par7) and (par3 or par10))))">>.
+<<"((not (par10 or par9)) or par5) or (((not (par6 or (par7 and par3))) and (par4 and par1)) or ((not par2) or par8))">>.
+<<"par8 or (((par1 or (par4 or par6)) or (not (not (par10 and par2)))) and (par5 or ((par9 or par3) or (not par7))))">>.
+<<"(par9 or (par3 and par2)) and ((((par10 and (not par7)) and (not (not (not par4)))) or (par8 and par1)) and (not (par5 and par6)))">>.
+<<"((((not par5) or (((not par6) and par1) or (not par4))) or (not par10)) and (par9 and par7)) and ((not par3) or (par8 or par2))">>.
+<<"(par7 or (not (par10 and ((par9 and par6) and par8)))) or (((par2 or (not (par1 or (not par5)))) or par3) or (not par4))">>.
+<<"((par4 and par8) or (((par3 or par10) or par2) and ((par5 and (par9 or par7)) and par1))) and par6">>.
+<<"(par2 and par3) or (((((par1 and par7) or (not par8)) and (not par10)) and (par6 and par5)) or (par9 or par4))">>.
+<<"(((not (par6 or par7)) and ((((par3 and par2) and (par1 or par9)) or par8) or par4)) or par10) and par5">>.
+<<"(((par7 or par2) and (not (par8 or par4))) and (not (((not par10) and (par5 or par9)) and (par6 and par3)))) and par1">>.
+<<"(par6 or par5) and ((not (par7 and (par1 or par9))) or (((par4 and par8) and par10) or (par2 or par3)))">>.
+<<"((not par10) and (not ((not par3) or ((par1 or par9) and (par6 or par5))))) and (not (par4 and ((not (par7 and par8)) or par2)))">>.
+<<"((par6 and (par1 and par5)) or par4) or (not ((par2 or par7) or ((not (par10 or (not par3))) and (par9 or par8))))">>.
+<<"((not ((par1 or par6) or par2)) or ((par10 or (not par7)) and (not par8))) and (par4 and (par3 or (par9 and par5)))">>.
+<<"par4 and (((((not (par6 and par7)) and par2) or par9) and (par3 and par1)) or ((par10 or par8) or par5))">>.
+<<"(not (((not par3) and (par1 and par8)) or (not ((par2 and par7) or (par6 and par9))))) or (not (par10 and (par4 and par5)))">>.
+<<"(((par6 and par2) or ((par1 and (not (not par9))) or (not (par5 and par8)))) or (par7 or par3)) and (par10 and par4)">>.
+<<"par1 or ((((par10 or par8) or par2) and (not (par4 and par6))) or ((par5 or par9) and (par3 and par7)))">>.
+<<"(((((not par5) or par10) and par3) and par1) and par2) or (par7 or (not (par6 and (par8 and (par9 and par4)))))">>.
+<<"(((((par10 or par3) or par2) or par7) and (par4 and (not par9))) and (not (not par8))) or (par5 or (par1 and par6))">>.
+<<"(not (((par10 and (not par3)) and par6) and (not par4))) and ((((par7 or par5) or (not par2)) or (not ((not par9) or par1))) and (not par8))">>.
+<<"((not (par3 or (par9 or par2))) or (par4 and par1)) and ((par6 or ((par8 or par10) and par5)) or par7)">>.
+<<"(not (((par6 and ((not par7) or par4)) or ((par9 or (par8 or (par2 or par3))) or par10)) and (not par5))) and par1">>.
+<<"((par10 and (par2 and par1)) and (not par7)) and (((par4 and (not par3)) and (not par8)) and (par5 or (par9 and par6)))">>.
+<<"(par3 and (par6 or par10)) and ((((par2 or par4) or (par5 and par8)) or par1) and ((not par9) and par7))">>.
+<<"(((not (not (par3 or par10))) or (par6 or par5)) or (par7 or par1)) or ((par2 and par8) and (par4 or par9))">>.
+<<"((par3 and (par8 and par1)) or ((par6 and par7) or (par5 or par9))) and ((not (par10 and par4)) and par2)">>.
+<<"(par8 or par5) and ((((par6 and (not (par7 and par4))) and par1) or (par10 and par2)) or (par9 and par3))">>.
+<<"(par6 and par8) or ((not (par3 or par2)) or (((par1 and (par10 or par4)) or par5) and (par9 and par7)))">>.
+<<"((((par10 or par2) and par7) and par9) or (par6 and (not par8))) and ((not (par3 or par1)) or (par4 or par5))">>.
+<<"(((par8 or (par4 or (par6 or (not par10)))) or (par2 and par7)) and par1) and ((par5 or par9) and par3)">>.
+<<"((par7 or (not par5)) and (((par1 or par9) or (not par3)) and par10)) and (par8 or (par6 or (par4 or par2)))">>.
+<<"((par6 and par9) or (((par5 or par10) and (par2 or par4)) or ((par1 or par8) and par3))) and (not par7)">>.
+<<"(not ((par2 and par6) or ((par7 and par5) and ((par4 and par1) and (par8 or (par9 and par3)))))) or par10">>.

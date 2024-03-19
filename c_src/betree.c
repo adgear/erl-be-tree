@@ -5,10 +5,17 @@
 
 #include "erl_nif.h"
 
+// IMPORTANT! `NIF true` has to be defined before the use of any `be-tree` library headers.
+// `NIF` controls memory allocation/de-allocation functions in `alloc.h`.
+// The usage of different sets of allocation/de-allocation functions
+// in the `be-tree` library and in the `erl-be-tree` will lead to memory leaks and/or crashes.
+#define NIF true
+
 #include "betree.h"
 
 // return values
 static ERL_NIF_TERM atom_ok;
+static ERL_NIF_TERM atom_continue;
 static ERL_NIF_TERM atom_error;
 static ERL_NIF_TERM atom_bad_expr;
 static ERL_NIF_TERM atom_bad_event;
@@ -44,10 +51,85 @@ static ERL_NIF_TERM atom_unknown;
 
 static ErlNifResourceType* MEM_BETREE;
 static ErlNifResourceType* MEM_SUB;
+static ErlNifResourceType* MEM_SEARCH_ITERATOR;
 
 struct sub {
     const struct betree_sub* sub;
 };
+
+#include "alloc.h"
+#include "hashmap.h"
+#include "tree.h"
+
+struct search_iterator {
+    size_t attr_domain_count;
+    struct betree_event* event;
+    const struct betree_variable** variables;
+    size_t undefined_count;
+    uint64_t* undefined;
+    size_t memoize_count;
+    struct memoize memoize;
+    struct subs_to_eval subs;
+    int node_count;
+    struct report_counting* report;
+    size_t index;
+};
+
+static void search_iterator_init(struct search_iterator* search_iterator)
+{
+    search_iterator->attr_domain_count = 0;
+    search_iterator->event = NULL;
+    search_iterator->variables = NULL;
+    search_iterator->undefined_count = 0;
+    search_iterator->undefined = NULL;
+    search_iterator->memoize_count = 0;
+    search_iterator->memoize.pass = NULL;
+    search_iterator->memoize.fail = NULL;
+    search_iterator->subs.subs = NULL;
+    search_iterator->subs.capacity = 0;
+    search_iterator->subs.count = 0;
+    search_iterator->report = NULL;
+    search_iterator->node_count = 0;
+    search_iterator->index = 0;
+}
+
+static void search_iterator_deinit(struct search_iterator* search_iterator)
+{
+    if (search_iterator->event != NULL) {
+        betree_free_event(search_iterator->event);
+        search_iterator->event = NULL;
+    }
+    if (search_iterator->variables != NULL) {
+        search_iterator->attr_domain_count = 0;
+        bfree(search_iterator->variables);
+        search_iterator->variables = NULL;
+    }
+    if (search_iterator->undefined != NULL) {
+        search_iterator->undefined_count = 0;
+        bfree(search_iterator->undefined);
+        search_iterator->undefined = NULL;
+    }
+    search_iterator->memoize_count = 0;
+    if (search_iterator->memoize.pass != NULL) {
+        bfree(search_iterator->memoize.pass);
+        search_iterator->memoize.pass = NULL;
+    }
+    if (search_iterator->memoize.fail != NULL) {
+        bfree(search_iterator->memoize.fail);
+        search_iterator->memoize.fail = NULL;
+    }
+    if (search_iterator->subs.subs != NULL) {
+        search_iterator->subs.capacity = 0;
+        search_iterator->subs.count = 0;
+        bfree(search_iterator->subs.subs);
+        search_iterator->subs.subs = NULL;
+    }
+    if (search_iterator->report != NULL) {
+        free_report_counting(search_iterator->report);
+        search_iterator->report = NULL;
+    }
+    search_iterator->node_count = 0;
+}
 
 static ERL_NIF_TERM make_atom(ErlNifEnv* env, const char* name)
 {
@@ -67,6 +149,12 @@ static void cleanup_betree(ErlNifEnv* env, void* obj)
     betree_deinit(betree);
 }
 
+static void cleanup_search_iterator(ErlNifEnv* env, void* obj)
+{
+    (void)env;
+    struct search_iterator* search_iterator = obj;
+    search_iterator_deinit(search_iterator);
+}
 
 static int load(ErlNifEnv* env, void **priv_data, ERL_NIF_TERM load_info)
 {
@@ -74,6 +162,7 @@ static int load(ErlNifEnv* env, void **priv_data, ERL_NIF_TERM load_info)
     (void)load_info;
 
     atom_ok = make_atom(env, "ok");
+    atom_continue = make_atom(env, "continue");
     atom_error = make_atom(env, "error");
     atom_bad_expr = make_atom(env, "bad_expr");
     atom_bad_event = make_atom(env, "bad_event");
@@ -113,6 +202,10 @@ static int load(ErlNifEnv* env, void **priv_data, ERL_NIF_TERM load_info)
     if(MEM_SUB == NULL) {
         return -1;
     }
+    MEM_SEARCH_ITERATOR = enif_open_resource_type(env, NULL, "search_iterator", cleanup_search_iterator, flags, NULL);
+    if(MEM_SEARCH_ITERATOR == NULL) {
+        return -1;
+    }
 
     return 0;
 }
@@ -122,6 +215,13 @@ static struct betree* get_betree(ErlNifEnv* env, const ERL_NIF_TERM term)
     struct betree* betree = NULL;
     enif_get_resource(env, term, MEM_BETREE, (void*)&betree);
     return betree;
+}
+
+static struct search_iterator* get_search_iterator(ErlNifEnv* env, const ERL_NIF_TERM term)
+{
+    struct search_iterator* search_iterator = NULL;
+    enif_get_resource(env, term, MEM_SEARCH_ITERATOR, (void*)&search_iterator);
+    return search_iterator;
 }
 
 static struct sub* get_sub(ErlNifEnv* env, const ERL_NIF_TERM term)
@@ -138,11 +238,8 @@ static char *alloc_string(ErlNifBinary bin)
     if (!key) {
         return NULL;
     }
-
     memcpy(key, bin.data, key_len);
-
     key[key_len] = 0;
-
     return key;
 }
 
@@ -447,17 +544,12 @@ cleanup:
 static bool get_binary(ErlNifEnv* env, ERL_NIF_TERM term, const char* name, struct betree_variable** variable)
 {
     ErlNifBinary bin;
-
     if (!enif_inspect_binary(env, term, &bin)) {
         return false;
     }
-
     char* value = alloc_string(bin);
-
     *variable = betree_make_string_variable(name, value);
-
     enif_free(value);
-
     return true;
 }
 
@@ -945,6 +1037,236 @@ cleanup:
     return retval;
 }
 
+static void bump_used_reductions(ErlNifEnv* env, int count)
+{
+    const int reduction_per_count = 1;
+    const int DEFAULT_ERLANG_REDUCTION_COUNT = 2000;
+    int reductions_used = count * reduction_per_count;
+    int pct_used = 100 * reductions_used / DEFAULT_ERLANG_REDUCTION_COUNT;
+    if(pct_used > 0) {
+        if(pct_used > 100) {
+            pct_used = 100;
+        }
+    } else {
+        pct_used = 1;
+    }
+    enif_consume_timeslice(env, pct_used);
+}
+
+static ERL_NIF_TERM nif_betree_search_iterator(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    if(argc != 2) {
+        return enif_make_badarg(env);
+    }
+
+    struct betree* betree = get_betree(env, argv[0]);
+    if(betree == NULL) {
+        return enif_make_badarg(env);
+    }
+
+    unsigned int list_len;
+    if(!enif_get_list_length(env, argv[1], &list_len)) {
+        return enif_make_badarg(env);
+    }
+
+    struct search_iterator* search_iterator = enif_alloc_resource(MEM_SEARCH_ITERATOR, sizeof(*search_iterator));
+    search_iterator_init(search_iterator);
+
+    ERL_NIF_TERM search_iterator_term = enif_make_resource(env, search_iterator);
+    enif_release_resource(search_iterator);
+
+    search_iterator->attr_domain_count = betree->config->attr_domain_count;
+    search_iterator->event = betree_make_event(betree);
+
+    ERL_NIF_TERM head;
+    ERL_NIF_TERM tail = argv[1];
+
+    size_t pred_index = 0;
+    const ERL_NIF_TERM* tuple;
+    int tuple_len;
+
+    for(unsigned int i = 0; i < list_len; i++) {
+        if(!enif_get_list_cell(env, tail, &head, &tail)) {
+            search_iterator_deinit(search_iterator);
+            return enif_make_badarg(env);
+        }
+
+        if(!enif_get_tuple(env, head, &tuple_len, &tuple)) {
+            search_iterator_deinit(search_iterator);
+            return enif_make_badarg(env);
+        }
+
+        if(!add_variables(env, betree, search_iterator->event, tuple, tuple_len, pred_index)) {
+            search_iterator_deinit(search_iterator);
+            return enif_make_badarg(env);
+        }
+        pred_index += (tuple_len - 1);
+    }
+
+    fill_event(betree->config, search_iterator->event);
+    sort_event_lists(search_iterator->event);
+    search_iterator->variables
+            = make_environment(betree->config->attr_domain_count, search_iterator->event);
+    if(validate_variables(betree->config, search_iterator->variables) == false) {
+        fprintf(stderr, "Failed to validate event\n");
+        search_iterator_deinit(search_iterator);
+        return enif_make_badarg(env);
+    }
+
+    search_iterator->undefined = make_undefined_with_count(betree->config->attr_domain_count,
+                                                           search_iterator->variables,
+                                                           &search_iterator->undefined_count);
+    search_iterator->memoize = make_memoize_with_count(betree->config->pred_map->memoize_count,
+                                                       &search_iterator->memoize_count);
+    init_subs_to_eval_ext(&search_iterator->subs, 64);
+    match_be_tree_node_counting(
+            (const struct attr_domain**)betree->config->attr_domains,
+            search_iterator->variables,
+            betree->cnode, &search_iterator->subs, &search_iterator->node_count);
+    bump_used_reductions(env, search_iterator->node_count);
+
+    ERL_NIF_TERM subs_count = enif_make_ulong(env, search_iterator->subs.count);
+    ERL_NIF_TERM node_count = enif_make_long(env, search_iterator->node_count);
+    ERL_NIF_TERM ret = enif_make_tuple3(env, search_iterator_term, subs_count, node_count);
+
+    return enif_make_tuple2(env, atom_ok, ret);
+}
+
+static ERL_NIF_TERM nif_betree_search_next(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+    if (argc != 1) {
+        return enif_make_badarg(env);
+    }
+
+    struct search_iterator* search_iterator = get_search_iterator(env, argv[0]);
+    if(search_iterator == NULL) {
+        return enif_make_badarg(env);
+    }
+
+    if (search_iterator->report == NULL) {
+        search_iterator->report = make_report_counting();
+    }
+
+    if (search_iterator->index >= search_iterator->subs.count) {
+        ERL_NIF_TERM matched;
+        if (search_iterator->report->matched == 0) {
+            ERL_NIF_TERM tmp[1];
+            matched = enif_make_list_from_array(env, tmp, 0);
+        } else {
+            ERL_NIF_TERM* arr = enif_alloc(sizeof(ERL_NIF_TERM) * search_iterator->report->matched);
+            for (int i = 0; i < search_iterator->report->matched; ++i) {
+                arr[i] = enif_make_uint64(env, search_iterator->report->subs[i]);
+            }
+            matched = enif_make_list_from_array(env, arr, search_iterator->report->matched);
+            enif_free(arr);
+        }
+        bump_used_reductions(env, 1);
+        return enif_make_tuple2(env, atom_ok, matched);
+    }
+
+    const struct betree_sub* sub = search_iterator->subs.subs[search_iterator->index];
+    search_iterator->report->evaluated++;
+    int count_before = search_iterator->report->node_count + search_iterator->report->ops_count;
+    bool id_matched = false;
+    if(match_sub_counting(search_iterator->attr_domain_count,
+                          search_iterator->variables,
+                          sub,
+                          search_iterator->report,
+                          &search_iterator->memoize,
+                          search_iterator->undefined) == true) {
+        id_matched = true;
+        add_sub_counting(sub->id, search_iterator->report);
+    }
+    search_iterator->index++;
+    int count_diff = (search_iterator->report->node_count + search_iterator->report->ops_count)
+            - count_before;
+    bump_used_reductions(env, count_diff);
+
+    if (search_iterator->index == search_iterator->subs.count) {
+        ERL_NIF_TERM matched;
+        if (search_iterator->report->matched == 0) {
+            ERL_NIF_TERM tmp[1];
+            matched = enif_make_list_from_array(env, tmp, 0);
+        } else {
+            ERL_NIF_TERM* arr = enif_alloc(sizeof(ERL_NIF_TERM) * search_iterator->report->matched);
+            for (int i = 0; i < search_iterator->report->matched; ++i) {
+                arr[i] = enif_make_uint64(env, search_iterator->report->subs[i]);
+            }
+            matched = enif_make_list_from_array(env, arr, search_iterator->report->matched);
+            enif_free(arr);
+        }
+        return enif_make_tuple2(env, atom_ok, matched);
+    }
+
+    ERL_NIF_TERM id[1];
+    ERL_NIF_TERM matched;
+    if (id_matched) {
+        id[0] = enif_make_uint64(env, sub->id);
+        matched = enif_make_list_from_array(env, id, 1);
+        return enif_make_tuple2(env, atom_continue, matched);
+    }
+    matched = enif_make_list_from_array(env, id, 0);
+    return enif_make_tuple2(env, atom_continue, matched);
+}
+
+static ERL_NIF_TERM nif_betree_search_all(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    if (argc != 1) {
+        return enif_make_badarg(env);
+    }
+
+    struct search_iterator* search_iterator = get_search_iterator(env, argv[0]);
+    if(search_iterator == NULL) {
+        return enif_make_badarg(env);
+    }
+
+    search_iterator->report = make_report_counting();
+    for(size_t i = 0; i < search_iterator->subs.count; i++) {
+        const struct betree_sub* sub = search_iterator->subs.subs[i];
+        search_iterator->report->evaluated++;
+        if(match_sub_counting(search_iterator->attr_domain_count,
+                     search_iterator->variables,
+                     sub,
+                     search_iterator->report,
+                     &search_iterator->memoize,
+                     search_iterator->undefined) == true) {
+            add_sub_counting(sub->id, search_iterator->report);
+        }
+    }
+
+    ERL_NIF_TERM matched;
+    if (search_iterator->report->matched == 0) {
+        ERL_NIF_TERM tmp[1];
+        matched = enif_make_list_from_array(env, tmp, 0);
+    } else {
+        ERL_NIF_TERM* arr = enif_alloc(sizeof(ERL_NIF_TERM) * search_iterator->report->matched);
+        for (int i = 0; i < search_iterator->report->matched; ++i) {
+            arr[i] = enif_make_uint64(env, search_iterator->report->subs[i]);
+        }
+        matched = enif_make_list_from_array(env, arr, search_iterator->report->matched);
+        enif_free(arr);
+    }
+
+    bump_used_reductions(env,
+        search_iterator->report->node_count + search_iterator->report->ops_count);
+
+    return enif_make_tuple2(env, atom_ok, matched);
+}
+
+static ERL_NIF_TERM nif_betree_search_iterator_release(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+    if (argc != 1) {
+        return enif_make_badarg(env);
+    }
+
+    struct search_iterator* search_iterator = get_search_iterator(env, argv[0]);
+    if(search_iterator == NULL) {
+        return enif_make_badarg(env);
+    }
+
+    search_iterator_deinit(search_iterator);
+
+    return atom_ok;
+}
+
 /*static ERL_NIF_TERM nif_betree_delete(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])*/
 /*{*/
     /*ERL_NIF_TERM retval;*/
@@ -974,9 +1296,12 @@ static ErlNifFunc nif_functions[] = {
     {"betree_insert_sub", 2, nif_betree_insert_sub, 0},
     {"betree_exists", 2, nif_betree_exists, 0},
     {"betree_search", 2, nif_betree_search, 0},
-    {"betree_search", 3, nif_betree_search_t, 0}
+    {"betree_search", 3, nif_betree_search_t, 0},
+    {"search_iterator", 2, nif_betree_search_iterator, 0},
+    {"search_next", 1, nif_betree_search_next, 0},
+    {"search_all", 1, nif_betree_search_all, 0},
+    {"search_iterator_release", 1, nif_betree_search_iterator_release, 0},
     /*{"betree_delete", 2, nif_betree_delete, 0}*/
 };
 
 ERL_NIF_INIT(erl_betree_nif, nif_functions, &load, NULL, NULL, NULL);
-
