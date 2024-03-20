@@ -25,6 +25,8 @@
   iterated_betree_search_next/2,
   stats_collector/2,
 
+  % intersect outputs
+  intersect/3,
   % compare evaluation outputs
   diff/2,
 
@@ -201,6 +203,41 @@ stats_collector({DiffNano, Allocations}, #be_evaluator_stats{
           snapshot_nano_acc = SnapshotNanoAcc1}
     end,
   {ok, Stats1}.
+
+intersect([_|_] = FileName1, [_|_] = FileName2, [_|_] = FileNameOutput) ->
+  {ok, PidIn1} = term_reader:start_link(FileName1),
+  {ok, PidIn2} = term_reader:start_link(FileName2),
+  {ok, PidOut} = term_writer:start_link(FileNameOutput),
+  Ret = intersect(PidIn1, PidIn2, PidOut),
+  term_writer:stop(PidOut),
+  term_reader:stop(PidIn2),
+  term_reader:stop(PidIn1),
+  Ret;
+
+intersect(PidIn1, PidIn2, PidOut) when
+  is_pid(PidIn1), is_pid(PidIn2), is_pid(PidOut) ->
+  Ret1 = term_reader:read(PidIn1),
+  case Ret1 of
+    eof -> ok;
+    {error, _Reason} = Err -> Err;
+    {ok, Term1} ->
+      Ret2 = term_reader:read(PidIn2),
+      case Ret2 of
+        eof -> ok;
+        {error, _Reason} = Err -> Err;
+        {ok, Term2} ->
+          Map1 = maps:from_keys(Term1, undefined),
+          Map2 = maps:from_keys(Term2, undefined),
+          Map = maps:intersect(Map1, Map2),
+          TermOut = maps:keys(Map),
+          term_writer:write(PidOut, TermOut),
+          intersect(PidIn1, PidIn2, PidOut)
+      end
+  end;
+
+intersect(_, _, _) ->
+  {error, wrong_parameters}.
+
 
 diff(FileName1, FileName2) ->
   {ok, _} = term_reader:start_link(in1, FileName1),
