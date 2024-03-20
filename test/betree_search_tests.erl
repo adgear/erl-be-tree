@@ -127,7 +127,8 @@ atom_event_search_term_test() ->
     {Res2, _} = erl_betree:betree_search_ids(Betree, Event, [1], 0),
     ?assertEqual({ok, [1]}, Res2),
     {Res3, _} = erl_betree:betree_search_ids(Betree, Event, [3], 0),
-    ?assertEqual({ok, [3]}, Res3).
+    ?assertEqual({ok, [3]}, Res3),
+    ok.
 
 
     atom_ids_search_term_test() ->
