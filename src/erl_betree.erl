@@ -11,7 +11,11 @@
     betree_search/3,
     betree_search_ids/3,
     betree_search_ids/4,
-    betree_write_dot/2
+    betree_write_dot/2,
+    search_iterator/2,
+    search_next/1,
+    search_all/1,
+    search_iterator_release/1
 ]).
 
 -inline([check_clock_type/1]).
@@ -66,3 +70,12 @@ check_clock_type(?CLOCK_REALTIME) -> ?CLOCK_REALTIME;
 check_clock_type(?CLOCK_PROCESS_CPUTIME_ID) -> ?CLOCK_PROCESS_CPUTIME_ID;
 check_clock_type(?CLOCK_THREAD_CPUTIME_ID) -> ?CLOCK_THREAD_CPUTIME_ID;
 check_clock_type(_) -> ?CLOCK_MONOTONIC.
+
+search_iterator(Betree, Event) ->
+    erl_betree_nif:search_iterator(Betree, Event).
+search_next(Iterator) ->
+    erl_betree_nif:search_next(Iterator).
+search_all(Iterator) ->
+    erl_betree_nif:search_all(Iterator).
+search_iterator_release(Iterator) ->
+    erl_betree_nif:search_iterator_release(Iterator).
