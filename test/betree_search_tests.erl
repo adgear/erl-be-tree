@@ -204,4 +204,102 @@ atom_event_search_term_test() ->
       {Res3, _} = erl_betree:betree_search_ids(Betree, Evt, [3], 0),
       ?assertEqual({ok, [3]}, Res3),
       ok.
-  
+
+two_betrees_test() ->
+  Domains = [[
+    {par1,bool,disallow_undefined},
+    {par2,bool,disallow_undefined}]],
+  {ok, Betree1} = erl_betree:betree_make(Domains),
+  Expr1 = <<"par1">>,
+  {ok, Sub1} = erl_betree:betree_make_sub(Betree1, 1, [], Expr1),
+  ok = erl_betree:betree_insert_sub(Betree1, Sub1),
+
+  {ok, Betree2} = erl_betree:betree_make(Domains),
+  Expr2 = <<"par2">>,
+  {ok, Sub2} = erl_betree:betree_make_sub(Betree2, 1, [], Expr2),
+  ok = erl_betree:betree_insert_sub(Betree2, Sub2),
+
+  Event = [{bool_event, true, true}],
+  Ret_betree_make_event = erl_betree:betree_make_event(Betree1, Event),
+  ?assertMatch({{ok, _}, _}, Ret_betree_make_event),
+  {{ok, Evt}, _} = Ret_betree_make_event,
+
+  Ret_betree1_search = erl_betree:betree_search(Betree1, Evt, 0),
+  ?assertMatch({{ok, _}, _}, Ret_betree1_search),
+  {{ok, Matched1}, _} = Ret_betree1_search,
+  ?assertEqual([1], Matched1),
+
+  Ret_betree2_search = erl_betree:betree_search(Betree2, Evt, 0),
+  ?assertMatch({{ok, _}, _}, Ret_betree2_search),
+  {{ok, Matched2}, _} = Ret_betree2_search,
+  ?assertEqual([1], Matched2).
+
+two_betrees_search_ids_test() ->
+  Domains = [[
+    {par1,bool,disallow_undefined},
+    {par2,bool,disallow_undefined}]],
+  {ok, Betree1} = erl_betree:betree_make(Domains),
+  Expr1 = <<"par1">>,
+  {ok, Sub1} = erl_betree:betree_make_sub(Betree1, 1, [], Expr1),
+  ok = erl_betree:betree_insert_sub(Betree1, Sub1),
+
+  {ok, Betree2} = erl_betree:betree_make(Domains),
+  Expr2 = <<"par2">>,
+  {ok, Sub2} = erl_betree:betree_make_sub(Betree2, 1, [], Expr2),
+  ok = erl_betree:betree_insert_sub(Betree2, Sub2),
+
+  Event = [{bool_event, true, true}],
+  Ret_betree_make_event = erl_betree:betree_make_event(Betree1, Event),
+  ?assertMatch({{ok, _}, _}, Ret_betree_make_event),
+  {{ok, Evt}, _} = Ret_betree_make_event,
+
+  Ret_betree1_search = erl_betree:betree_search(Betree1, Evt, 0),
+  ?assertMatch({{ok, _}, _}, Ret_betree1_search),
+  {{ok, Matched1}, _} = Ret_betree1_search,
+  ?assertEqual([1], Matched1),
+
+  Ret_betree2_search = erl_betree:betree_search_ids(Betree2, Evt, Matched1, 0),
+  ?assertMatch({{ok, _}, _}, Ret_betree2_search),
+  {{ok, Matched2}, _} = Ret_betree2_search,
+  ?assertEqual([1], Matched2).
+
+three_betrees_search_ids_test() ->
+  Domains = [[
+    {par1,bool,disallow_undefined},
+    {par2,bool,disallow_undefined},
+    {par3,bool,disallow_undefined}
+  ]],
+  {ok, Betree1} = erl_betree:betree_make(Domains),
+  Expr1 = <<"par1">>,
+  {ok, Sub1} = erl_betree:betree_make_sub(Betree1, 1, [], Expr1),
+  ok = erl_betree:betree_insert_sub(Betree1, Sub1),
+
+  {ok, Betree2} = erl_betree:betree_make(Domains),
+  Expr2 = <<"par2">>,
+  {ok, Sub2} = erl_betree:betree_make_sub(Betree2, 1, [], Expr2),
+  ok = erl_betree:betree_insert_sub(Betree2, Sub2),
+
+  {ok, Betree3} = erl_betree:betree_make(Domains),
+  Expr3 = <<"par3">>,
+  {ok, Sub3} = erl_betree:betree_make_sub(Betree3, 1, [], Expr3),
+  ok = erl_betree:betree_insert_sub(Betree3, Sub3),
+
+  Event = [{bool_event, true, true, true}],
+  Ret_betree_make_event = erl_betree:betree_make_event(Betree1, Event),
+  ?assertMatch({{ok, _}, _}, Ret_betree_make_event),
+  {{ok, Evt}, _} = Ret_betree_make_event,
+
+  Ret_betree1_search = erl_betree:betree_search(Betree1, Evt, 0),
+  ?assertMatch({{ok, _}, _}, Ret_betree1_search),
+  {{ok, Matched1}, _} = Ret_betree1_search,
+  ?assertEqual([1], Matched1),
+
+  Ret_betree2_search_ids = erl_betree:betree_search_ids(Betree2, Evt, Matched1, 0),
+  ?assertMatch({{ok, _}, _}, Ret_betree2_search_ids),
+  {{ok, Matched2}, _} = Ret_betree2_search_ids,
+  ?assertEqual([1], Matched2),
+
+  Ret_betree3_search_ids = erl_betree:betree_search_ids(Betree3, Evt, Matched2, 0),
+  ?assertMatch({{ok, _}, _}, Ret_betree3_search_ids),
+  {{ok, Matched3}, _} = Ret_betree3_search_ids,
+  ?assertEqual([1], Matched3).
