@@ -271,6 +271,286 @@ static char *alloc_string(ErlNifBinary bin)
     return key;
 }
 
+static bool get_binary(ErlNifEnv* env, ERL_NIF_TERM term, const char* name, struct betree_variable** variable)
+{
+    ErlNifBinary bin;
+    if (!enif_inspect_binary(env, term, &bin)) {
+        return false;
+    }
+    char* value = alloc_string(bin);
+    *variable = betree_make_string_variable(name, value);
+    enif_free(value);
+    return true;
+}
+
+static bool get_boolean(ErlNifEnv* env, ERL_NIF_TERM term, const char* name, struct betree_variable** variable)
+{
+    (void)env;
+    bool value = false;
+    if(enif_is_identical(atom_true, term)) {
+        value = true;
+    }
+    else if(enif_is_identical(atom_false, term)) {
+        value = false;
+    }
+    else {
+        return false;
+    }
+
+    *variable = betree_make_boolean_variable(name, value);
+
+    return true;
+}
+
+static bool get_int(ErlNifEnv* env, ERL_NIF_TERM term, const char* name, struct betree_variable** variable)
+{
+    int64_t value;
+    if(!enif_get_int64(env, term, &value)) {
+        return false;
+    }
+
+    *variable = betree_make_integer_variable(name, value);
+
+    return true;
+}
+
+static bool get_float(ErlNifEnv* env, ERL_NIF_TERM term, const char* name, struct betree_variable** variable)
+{
+    double value;
+    if(!enif_get_double(env, term, &value)) {
+        return false;
+    }
+
+    *variable = betree_make_float_variable(name, value);
+
+    return true;
+}
+
+static bool get_bin_list(ErlNifEnv* env, ERL_NIF_TERM term, const char* name, struct betree_variable** variable)
+{
+    ERL_NIF_TERM head;
+    ERL_NIF_TERM tail = term;
+    ErlNifBinary bin;
+    const char* value;
+    unsigned int length;
+
+    if (!enif_get_list_length(env, term, &length)) {
+        return false;
+    }
+
+    struct betree_string_list* list = betree_make_string_list(length);
+
+    for (unsigned int i = 0; i < length; i++) {
+        if(!enif_get_list_cell(env, tail, &head, &tail)) {
+            betree_free_string_list(list);
+            return false;
+        }
+
+        if(!enif_inspect_binary(env, head, &bin)) {
+            betree_free_string_list(list);
+            return false;
+        }
+
+        value = alloc_string(bin);
+        betree_add_string(list, i, value);
+        enif_free((char*)value);
+    }
+
+    *variable = betree_make_string_list_variable(name, list);
+
+    return true;
+}
+
+static bool get_int_list(ErlNifEnv* env, ERL_NIF_TERM term, const char* name, struct betree_variable** variable)
+{
+    ERL_NIF_TERM head;
+    ERL_NIF_TERM tail = term;
+    int64_t value;
+    unsigned int length;
+
+    if (!enif_get_list_length(env, term, &length)) {
+        return false;
+    }
+
+    struct betree_integer_list* list = betree_make_integer_list(length);
+
+    for (unsigned int i = 0; i < length; i++) {
+        if(!enif_get_list_cell(env, tail, &head, &tail)) {
+            betree_free_integer_list(list);
+            return false;
+        }
+        if (!enif_get_int64(env, head, &value)) {
+            betree_free_integer_list(list);
+            return false;
+        }
+
+        betree_add_integer(list, i, value);
+    }
+
+    *variable = betree_make_integer_list_variable(name, list);
+
+    return true;
+}
+
+static bool get_frequency_cap(ErlNifEnv* env, ERL_NIF_TERM term, struct betree_frequency_cap **ptr)
+{
+    int cap_arity;
+    int key_arity;
+    ErlNifBinary bin;
+    char* type_str = NULL;
+    char* ns_str = NULL;
+    bool success = true;
+
+    const ERL_NIF_TERM *cap_content;
+    const ERL_NIF_TERM *key_content;
+
+    if (!enif_get_tuple(env, term, &cap_arity, &cap_content) || cap_arity != 3) {
+        return false;
+    }
+
+    if (!enif_get_tuple(env, cap_content[0], &key_arity, &key_content) || key_arity != 3) {
+        return false;
+    }
+
+    if (!enif_inspect_binary(env, key_content[0], &bin)) {
+        return false;
+    }
+
+    type_str = alloc_string(bin);
+
+    uint32_t id;
+    if (!enif_get_uint(env, key_content[1], &id)) {
+        success = false;
+        goto cleanup;
+    }
+
+    if (!enif_inspect_binary(env, key_content[2], &bin)) {
+        success = false;
+        goto cleanup;
+    }
+
+    ns_str = alloc_string(bin);
+
+    uint32_t value;
+    if (!enif_get_uint(env, cap_content[1], &value)) {
+        success = false;
+        goto cleanup;
+    }
+
+    bool timestamp_defined;
+    int64_t timestamp = 0;
+    if(enif_is_identical(atom_undefined, cap_content[2])) {
+        timestamp_defined = false;
+    }
+    else if (enif_get_int64(env, cap_content[2], &timestamp)) {
+        timestamp_defined = true;
+    }
+    else {
+        success = false;
+        goto cleanup;
+    }
+    struct betree_frequency_cap* frequency_cap = betree_make_frequency_cap(type_str, id, ns_str, timestamp_defined, timestamp, value);
+    if(frequency_cap == NULL) {
+        success = false;
+        goto cleanup;
+    }
+    *ptr = frequency_cap;
+    cleanup:
+    if(type_str != NULL) {
+        enif_free(type_str);
+    }
+    if(ns_str != NULL) {
+        enif_free(ns_str);
+    }
+
+    return success;
+}
+
+static bool get_frequency_caps_list(ErlNifEnv* env, ERL_NIF_TERM term, const char* name, struct betree_variable** variable)
+{
+    ERL_NIF_TERM head;
+    ERL_NIF_TERM tail = term;
+    unsigned int length;
+
+    if (!enif_get_list_length(env, term, &length)) {
+        return false;
+    }
+
+    struct betree_frequency_caps* list = betree_make_frequency_caps(length);
+
+    for (unsigned int i = 0; i < length; i++) {
+        if(!enif_get_list_cell(env, tail, &head, &tail)) {
+            betree_free_frequency_caps(list);
+            return false;
+        }
+        struct betree_frequency_cap* frequency_cap;
+        if(!get_frequency_cap(env, head, &frequency_cap)) {
+            betree_free_frequency_caps(list);
+            return false;
+        }
+        betree_add_frequency_cap(list, i, frequency_cap);
+    }
+
+    *variable = betree_make_frequency_caps_variable(name, list);
+
+    return true;
+}
+
+static bool get_segment(ErlNifEnv* env, ERL_NIF_TERM term, struct betree_segment **ptr)
+{
+    int segment_arity;
+    const ERL_NIF_TERM *segment_content;
+
+    if (!enif_get_tuple(env, term, &segment_arity, &segment_content) || segment_arity != 2) {
+        return false;
+    }
+
+    int64_t id;
+    if (!enif_get_int64(env, segment_content[0], &id)) {
+        return false;
+    }
+
+    int64_t timestamp;
+    if (!enif_get_int64(env, segment_content[1], &timestamp)) {
+        return false;
+    }
+
+    *ptr = betree_make_segment(id, timestamp);
+
+    return true;
+}
+
+static bool get_segments_list(ErlNifEnv* env, ERL_NIF_TERM term, const char* name, struct betree_variable** variable)
+{
+    ERL_NIF_TERM head;
+    ERL_NIF_TERM tail = term;
+    unsigned int length;
+
+    if (!enif_get_list_length(env, term, &length)) {
+        return false;
+    }
+
+    struct betree_segments* list = betree_make_segments(length);
+
+    for (unsigned int i = 0; i < length; i++) {
+        if(!enif_get_list_cell(env, tail, &head, &tail)) {
+            betree_free_segments(list);
+            return false;
+        }
+        struct betree_segment* segment;
+        if(!get_segment(env, head, &segment)) {
+            betree_free_segments(list);
+            return false;
+        }
+
+        betree_add_segment(list, i, segment);
+    }
+
+    *variable = betree_make_segments_variable(name, list);
+
+    return true;
+}
+
 #define DOMAIN_NAME_LEN 256
 
 static bool add_domains(ErlNifEnv* env, struct betree* betree, ERL_NIF_TERM list, unsigned int list_len)
@@ -387,6 +667,61 @@ static bool add_domains(ErlNifEnv* env, struct betree* betree, ERL_NIF_TERM list
     return true;
 }
 
+static bool add_variables(ErlNifEnv* env, struct betree* betree, struct betree_event* event, const ERL_NIF_TERM* tuple, int tuple_len, size_t initial_domain_index)
+{
+    // Start at 1 to not use the record name
+    for(int i = 1; i < tuple_len; i++) {
+        ERL_NIF_TERM element = tuple[i];
+        if(enif_is_identical(atom_undefined, element)) {
+            continue;
+        }
+        size_t domain_index = initial_domain_index + i - 1;
+        struct betree_variable_definition def = betree_get_variable_definition(betree, domain_index);
+        bool result;
+        struct betree_variable* variable = NULL;
+        switch(def.type) {
+            case BETREE_BOOLEAN:
+                result = get_boolean(env, element, def.name, &variable);
+                break;
+            case BETREE_INTEGER:
+                result = get_int(env, element, def.name, &variable);
+                break;
+            case BETREE_FLOAT:
+                result = get_float(env, element, def.name, &variable);
+                break;
+            case BETREE_STRING:
+                result = get_binary(env, element, def.name, &variable);
+                break;
+            case BETREE_INTEGER_LIST:
+                result = get_int_list(env, element, def.name, &variable);
+                break;
+            case BETREE_STRING_LIST:
+                result = get_bin_list(env, element, def.name, &variable);
+                break;
+            case BETREE_SEGMENTS:
+                result = get_segments_list(env, element, def.name, &variable);
+                break;
+            case BETREE_FREQUENCY_CAPS:
+                result = get_frequency_caps_list(env, element, def.name, &variable);
+                break;
+            case BETREE_INTEGER_ENUM:
+                result = get_int(env, element, def.name, &variable);
+                break;
+            default:
+                result = false;
+                break;
+        }
+        if(result == false) {
+            if(variable != NULL) {
+                betree_free_variable(variable);
+            }
+            return false;
+        }
+        betree_set_variable(event, domain_index, variable);
+    }
+    return true;
+}
+
 static ERL_NIF_TERM nif_betree_make(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
     ERL_NIF_TERM retval;
@@ -431,6 +766,80 @@ static ERL_NIF_TERM nif_betree_make(ErlNifEnv* env, int argc, const ERL_NIF_TERM
     retval = enif_make_tuple(env, 2, atom_ok, term);
 cleanup:
     return retval;
+}
+
+static ERL_NIF_TERM nif_betree_make_event(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    ERL_NIF_TERM retval;
+    int clock_type = 0;
+    struct betree_event* event = NULL;
+    struct evt* evt = NULL;
+
+    if(argc != 3) {
+        retval = enif_make_badarg(env);
+        goto cleanup;
+    }
+
+    if (!enif_get_int(env, argv[2], &clock_type)) {
+        return enif_make_badarg(env);
+    }
+    struct timespec start, done;
+    clock_gettime(clock_type, &start);
+
+    struct betree* betree = get_betree(env, argv[0]);
+    if(betree == NULL) {
+        retval = enif_make_badarg(env);
+        goto cleanup;
+    }
+
+    unsigned int list_len;
+    if(!enif_get_list_length(env, argv[1], &list_len)) {
+        retval = enif_make_badarg(env);
+        goto cleanup;
+    }
+
+    evt = enif_alloc_resource(MEM_EVENT, sizeof(*evt));
+    if (evt == NULL) {
+        retval = enif_make_badarg(env);
+        goto cleanup;
+    }
+    evt->event = event = betree_make_event(betree);
+    ERL_NIF_TERM erl_event = enif_make_resource(env, evt);
+
+    ERL_NIF_TERM head;
+    ERL_NIF_TERM tail = argv[1];
+    const ERL_NIF_TERM* tuple;
+
+    size_t pred_index = 0;
+    int tuple_len;
+
+    for(unsigned int i = 0; i < list_len; i++) {
+        if(!enif_get_list_cell(env, tail, &head, &tail)) {
+            retval = enif_make_badarg(env);
+            goto cleanup;
+        }
+
+        if(!enif_get_tuple(env, head, &tuple_len, &tuple)) {
+            retval = enif_make_badarg(env);
+            goto cleanup;
+        }
+
+        if(!add_variables(env, betree, event, tuple, tuple_len, pred_index)) {
+            retval = enif_make_badarg(env);
+            goto cleanup;
+        }
+        pred_index += (tuple_len - 1);
+    }
+
+    retval = enif_make_tuple(env, 2, atom_ok, erl_event);
+
+    cleanup:
+    if (evt != NULL) {
+        enif_release_resource(evt);
+    }
+    clock_gettime(clock_type, &done);
+    ERL_NIF_TERM etspent = make_time(env, &start, &done);
+    return enif_make_tuple2(env, retval, etspent);
 }
 
 #define CONSTANT_NAME_LEN 256
@@ -567,341 +976,6 @@ static ERL_NIF_TERM nif_betree_insert_sub(ErlNifEnv* env, int argc, const ERL_NI
     }
 cleanup:
     return retval;
-}
-
-static bool get_binary(ErlNifEnv* env, ERL_NIF_TERM term, const char* name, struct betree_variable** variable)
-{
-    ErlNifBinary bin;
-    if (!enif_inspect_binary(env, term, &bin)) {
-        return false;
-    }
-    char* value = alloc_string(bin);
-    *variable = betree_make_string_variable(name, value);
-    enif_free(value);
-    return true;
-}
-
-static bool get_boolean(ErlNifEnv* env, ERL_NIF_TERM term, const char* name, struct betree_variable** variable) 
-{
-    (void)env;
-    bool value = false;
-    if(enif_is_identical(atom_true, term)) {
-        value = true;
-    }
-    else if(enif_is_identical(atom_false, term)) {
-        value = false;
-    }
-    else {
-        return false;
-    }
-
-    *variable = betree_make_boolean_variable(name, value);
-
-    return true;
-}
-
-static bool get_int(ErlNifEnv* env, ERL_NIF_TERM term, const char* name, struct betree_variable** variable) 
-{
-    int64_t value;
-    if(!enif_get_int64(env, term, &value)) {
-        return false;
-    }
-
-    *variable = betree_make_integer_variable(name, value);
-
-    return true;
-}
-
-static bool get_float(ErlNifEnv* env, ERL_NIF_TERM term, const char* name, struct betree_variable** variable) 
-{
-    double value;
-    if(!enif_get_double(env, term, &value)) {
-        return false;
-    }
-
-    *variable = betree_make_float_variable(name, value);
-
-    return true;
-}
-
-static bool get_bin_list(ErlNifEnv* env, ERL_NIF_TERM term, const char* name, struct betree_variable** variable) 
-{
-    ERL_NIF_TERM head;
-    ERL_NIF_TERM tail = term;
-    ErlNifBinary bin;
-    const char* value;
-    unsigned int length;
-
-    if (!enif_get_list_length(env, term, &length)) {
-        return false;
-    }
-
-    struct betree_string_list* list = betree_make_string_list(length);
-
-    for (unsigned int i = 0; i < length; i++) {
-        if(!enif_get_list_cell(env, tail, &head, &tail)) {
-            betree_free_string_list(list);
-            return false;
-        }
-
-        if(!enif_inspect_binary(env, head, &bin)) {
-            betree_free_string_list(list);
-            return false;
-        }
-
-        value = alloc_string(bin);
-        betree_add_string(list, i, value);
-        enif_free((char*)value);
-    }
-
-    *variable = betree_make_string_list_variable(name, list);
-
-    return true;
-}
-
-static bool get_int_list(ErlNifEnv* env, ERL_NIF_TERM term, const char* name, struct betree_variable** variable)
-{
-    ERL_NIF_TERM head;
-    ERL_NIF_TERM tail = term;
-    int64_t value;
-    unsigned int length;
-
-    if (!enif_get_list_length(env, term, &length)) {
-        return false;
-    }
-
-    struct betree_integer_list* list = betree_make_integer_list(length);
-
-    for (unsigned int i = 0; i < length; i++) {
-        if(!enif_get_list_cell(env, tail, &head, &tail)) {
-            betree_free_integer_list(list);
-            return false;
-        }
-        if (!enif_get_int64(env, head, &value)) {
-            betree_free_integer_list(list);
-            return false;
-        }
-
-        betree_add_integer(list, i, value);
-    }
-
-    *variable = betree_make_integer_list_variable(name, list);
-
-    return true;
-}
-
-static bool get_frequency_cap(ErlNifEnv* env, ERL_NIF_TERM term, struct betree_frequency_cap **ptr) 
-{
-    int cap_arity;
-    int key_arity;
-    ErlNifBinary bin;
-    char* type_str = NULL;
-    char* ns_str = NULL;
-    bool success = true;
-
-    const ERL_NIF_TERM *cap_content;
-    const ERL_NIF_TERM *key_content;
-
-    if (!enif_get_tuple(env, term, &cap_arity, &cap_content) || cap_arity != 3) {
-        return false;
-    }
-
-    if (!enif_get_tuple(env, cap_content[0], &key_arity, &key_content) || key_arity != 3) {
-        return false;
-    }
-
-    if (!enif_inspect_binary(env, key_content[0], &bin)) {
-        return false;
-    }
-
-    type_str = alloc_string(bin);
-
-    uint32_t id;
-    if (!enif_get_uint(env, key_content[1], &id)) {
-        success = false;
-        goto cleanup;
-    }
-
-    if (!enif_inspect_binary(env, key_content[2], &bin)) {
-        success = false;
-        goto cleanup;
-    }
-
-    ns_str = alloc_string(bin);
-
-    uint32_t value;
-    if (!enif_get_uint(env, cap_content[1], &value)) {
-        success = false;
-        goto cleanup;
-    }
-
-    bool timestamp_defined;
-    int64_t timestamp = 0;
-    if(enif_is_identical(atom_undefined, cap_content[2])) {
-        timestamp_defined = false;
-    }
-    else if (enif_get_int64(env, cap_content[2], &timestamp)) {
-        timestamp_defined = true;
-    }
-    else {
-        success = false;
-        goto cleanup;
-    }
-    struct betree_frequency_cap* frequency_cap = betree_make_frequency_cap(type_str, id, ns_str, timestamp_defined, timestamp, value);
-    if(frequency_cap == NULL) {
-        success = false;
-        goto cleanup;
-    }
-    *ptr = frequency_cap;
-cleanup:
-    if(type_str != NULL) {
-        enif_free(type_str);
-    }
-    if(ns_str != NULL) {
-        enif_free(ns_str);
-    }
-
-    return success;
-}
-
-static bool get_frequency_caps_list(ErlNifEnv* env, ERL_NIF_TERM term, const char* name, struct betree_variable** variable) 
-{
-    ERL_NIF_TERM head;
-    ERL_NIF_TERM tail = term;
-    unsigned int length;
-
-    if (!enif_get_list_length(env, term, &length)) {
-        return false;
-    }
-
-    struct betree_frequency_caps* list = betree_make_frequency_caps(length);
-
-    for (unsigned int i = 0; i < length; i++) {
-        if(!enif_get_list_cell(env, tail, &head, &tail)) {
-            betree_free_frequency_caps(list);
-            return false;
-        }
-        struct betree_frequency_cap* frequency_cap;
-        if(!get_frequency_cap(env, head, &frequency_cap)) {
-            betree_free_frequency_caps(list);
-            return false;
-        }
-        betree_add_frequency_cap(list, i, frequency_cap);
-    }
-
-    *variable = betree_make_frequency_caps_variable(name, list);
-
-    return true;
-}
-
-static bool get_segment(ErlNifEnv* env, ERL_NIF_TERM term, struct betree_segment **ptr)
-{
-    int segment_arity;
-    const ERL_NIF_TERM *segment_content;
-
-    if (!enif_get_tuple(env, term, &segment_arity, &segment_content) || segment_arity != 2) {
-        return false;
-    }
-
-    int64_t id;
-    if (!enif_get_int64(env, segment_content[0], &id)) {
-        return false;
-    }
-
-    int64_t timestamp;
-    if (!enif_get_int64(env, segment_content[1], &timestamp)) {
-        return false;
-    }
-
-    *ptr = betree_make_segment(id, timestamp);
-
-    return true;
-}
-
-static bool get_segments_list(ErlNifEnv* env, ERL_NIF_TERM term, const char* name, struct betree_variable** variable) 
-{
-    ERL_NIF_TERM head;
-    ERL_NIF_TERM tail = term;
-    unsigned int length;
-
-    if (!enif_get_list_length(env, term, &length)) {
-        return false;
-    }
-
-    struct betree_segments* list = betree_make_segments(length);
-
-    for (unsigned int i = 0; i < length; i++) {
-        if(!enif_get_list_cell(env, tail, &head, &tail)) {
-            betree_free_segments(list);
-            return false;
-        }
-        struct betree_segment* segment;
-        if(!get_segment(env, head, &segment)) {
-            betree_free_segments(list);
-            return false;
-        }
-
-        betree_add_segment(list, i, segment);
-    }
-
-    *variable = betree_make_segments_variable(name, list);
-
-    return true;
-}
-
-static bool add_variables(ErlNifEnv* env, struct betree* betree, struct betree_event* event, const ERL_NIF_TERM* tuple, int tuple_len, size_t initial_domain_index)
-{
-    // Start at 1 to not use the record name
-    for(int i = 1; i < tuple_len; i++) {
-        ERL_NIF_TERM element = tuple[i];
-        if(enif_is_identical(atom_undefined, element)) {
-            continue;
-        }
-        size_t domain_index = initial_domain_index + i - 1;
-        struct betree_variable_definition def = betree_get_variable_definition(betree, domain_index);
-        bool result;
-        struct betree_variable* variable = NULL;
-        switch(def.type) {
-            case BETREE_BOOLEAN: 
-                result = get_boolean(env, element, def.name, &variable); 
-                break;
-            case BETREE_INTEGER:
-                result = get_int(env, element, def.name, &variable);
-                break;
-            case BETREE_FLOAT:
-                result = get_float(env, element, def.name, &variable);
-                break;
-            case BETREE_STRING:
-                result = get_binary(env, element, def.name, &variable);
-                break;
-            case BETREE_INTEGER_LIST:
-                result = get_int_list(env, element, def.name, &variable);
-                break;
-            case BETREE_STRING_LIST:
-                result = get_bin_list(env, element, def.name, &variable);
-                break;
-            case BETREE_SEGMENTS:
-                result = get_segments_list(env, element, def.name, &variable);
-                break;
-            case BETREE_FREQUENCY_CAPS:
-                result = get_frequency_caps_list(env, element, def.name, &variable);
-                break;
-            case BETREE_INTEGER_ENUM:
-                result = get_int(env, element, def.name, &variable);
-                break;
-            default: 
-                result = false; 
-                break;
-        }
-        if(result == false) {
-            if(variable != NULL) {
-                betree_free_variable(variable);
-            }
-            return false;
-        }
-        betree_set_variable(event, domain_index, variable);
-    }
-    return true;
 }
 
 static ERL_NIF_TERM nif_betree_search(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
@@ -1313,6 +1387,41 @@ static ERL_NIF_TERM betree_write_dot(ErlNifEnv* env, int argc, const ERL_NIF_TER
     return enif_make_atom(env, "ok");
 }
 
+// Convert to microseconds
+static ERL_NIF_TERM make_time(ErlNifEnv* env, const struct timespec* start, const struct timespec* done) {
+    ErlNifSInt64 tspent = (done->tv_sec - start->tv_sec) * 1000000 + (done->tv_nsec - start->tv_nsec) / 1000;
+    ERL_NIF_TERM etspent = enif_make_int64(env, tspent);
+    return etspent;
+}
+
+static int cmpfunc(const void * a, const void * b) {
+    uint64_t f = *((uint64_t*)a);
+    uint64_t s = *((uint64_t*)b);
+    if (f > s) return  1;
+    if (f < s) return -1;
+    return 0;
+}
+
+static ERL_NIF_TERM ids_from_report(ErlNifEnv* env, const struct report* report) {
+    ERL_NIF_TERM res = enif_make_list(env, 0);
+    size_t sz = report->matched;
+    if(sz > 0){
+        uint64_t * ids = enif_alloc(sz * sizeof(uint64_t));
+        if (ids == NULL) return res;
+        for (size_t i = sz; i;) {
+            i--;
+            ids[i] = report->subs[i];
+        }
+        qsort(ids, sz, sizeof(uint64_t), cmpfunc);
+        for (size_t i = sz; i;) {
+            i--;
+            res = enif_make_list_cell(env, enif_make_uint64(env, ids[i]), res);
+        }
+        enif_free((void *) ids);
+    }
+    return res;
+}
+
 static void bump_used_reductions(ErlNifEnv* env, int count)
 {
     const int reduction_per_count = 1;
@@ -1541,115 +1650,6 @@ static ERL_NIF_TERM nif_betree_search_iterator_release(ErlNifEnv* env, int argc,
     search_iterator_deinit(search_iterator);
 
     return atom_ok;
-}
-
-static ERL_NIF_TERM nif_betree_make_event(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
-{
-    ERL_NIF_TERM retval;
-    int clock_type = 0;
-    struct betree_event* event = NULL;
-    struct evt* evt = NULL;
-
-    if(argc != 3) {
-        retval = enif_make_badarg(env);
-        goto cleanup;
-    }
-
-    if (!enif_get_int(env, argv[2], &clock_type)) {
-	    return enif_make_badarg(env);
-    }
-    struct timespec start, done;
-    clock_gettime(clock_type, &start);
-
-    struct betree* betree = get_betree(env, argv[0]);
-    if(betree == NULL) {
-        retval = enif_make_badarg(env);
-        goto cleanup;
-    }
-
-    unsigned int list_len;
-    if(!enif_get_list_length(env, argv[1], &list_len)) {
-        retval = enif_make_badarg(env);
-        goto cleanup;
-    }
-
-    evt = enif_alloc_resource(MEM_EVENT, sizeof(*evt));
-    if (evt == NULL) {
-        retval = enif_make_badarg(env);
-        goto cleanup;
-    }
-    evt->event = event = betree_make_event(betree);
-    ERL_NIF_TERM erl_event = enif_make_resource(env, evt);
-    
-    ERL_NIF_TERM head;
-    ERL_NIF_TERM tail = argv[1];
-    const ERL_NIF_TERM* tuple;
-
-    size_t pred_index = 0;
-    int tuple_len;
-
-    for(unsigned int i = 0; i < list_len; i++) {
-        if(!enif_get_list_cell(env, tail, &head, &tail)) {
-            retval = enif_make_badarg(env);
-            goto cleanup;
-        }
-
-        if(!enif_get_tuple(env, head, &tuple_len, &tuple)) {
-            retval = enif_make_badarg(env);
-            goto cleanup;
-        }
-
-        if(!add_variables(env, betree, event, tuple, tuple_len, pred_index)) {
-            retval = enif_make_badarg(env);
-            goto cleanup;
-        }
-        pred_index += (tuple_len - 1);
-    }
-
-    retval = enif_make_tuple(env, 2, atom_ok, erl_event);
-
-cleanup:
-    if (evt != NULL) {
-        enif_release_resource(evt);
-    }
-    clock_gettime(clock_type, &done);
-    ERL_NIF_TERM etspent = make_time(env, &start, &done);
-    return enif_make_tuple2(env, retval, etspent);
-}
-
-// Convert to microseconds
-static ERL_NIF_TERM make_time(ErlNifEnv* env, const struct timespec* start, const struct timespec* done) {
-    ErlNifSInt64 tspent = (done->tv_sec - start->tv_sec) * 1000000 + (done->tv_nsec - start->tv_nsec) / 1000;
-    ERL_NIF_TERM etspent = enif_make_int64(env, tspent);
-    return etspent;
-}
-
-static int cmpfunc(const void * a, const void * b) {
-    uint64_t f = *((uint64_t*)a);
-    uint64_t s = *((uint64_t*)b);
-    if (f > s) return  1;
-    if (f < s) return -1;
-    return 0;
-}
-
-static ERL_NIF_TERM ids_from_report(ErlNifEnv* env, const struct report* report) {
-    ERL_NIF_TERM res = enif_make_list(env, 0);
-    size_t sz = report->matched;
-    if(sz > 0){
-        uint64_t * ids = enif_alloc(sz * sizeof(uint64_t));
-        if (ids == NULL) return res;
-        for (size_t i = sz; i;) {
-		    i--;
-            ids[i] = report->subs[i];
-        }
-        qsort(ids, sz, sizeof(uint64_t), cmpfunc);
-        for (size_t i = sz; i;) {
-		    i--;
-            res = enif_make_list_cell(env, enif_make_uint64(env, ids[i]), res);
-        }
-        enif_free((void *) ids);
-	}
-    return res;
 }
 
 /*static ERL_NIF_TERM nif_betree_delete(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])*/
