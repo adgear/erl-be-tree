@@ -26,6 +26,8 @@ CFLAGS = -O3 -std=gnu11 -finline-functions -Wall -Wmissing-prototypes
 
 CFLAGS += -fPIC -I $(ERTS_INCLUDE_DIR) -I $(ERL_INTERFACE_INCLUDE_DIR) -I $(BETREE_INCLUDE_DIR)
 
+# CFLAGS += -Wno-incompatible-pointer-types
+
 LDLIBS += -L $(ERL_INTERFACE_LIB_DIR) -lei -L $(BETREE_LIB_DIR) -lbetree
 
 ifeq ($(UNAME), Darwin)

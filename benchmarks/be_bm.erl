@@ -19,6 +19,9 @@
   iterated_next/2,
   iterated_next_stats/3,
   iterated_next_output/3,
+  with_event/2,
+  with_event_stats/3,
+  with_event_output/3,
 
   std_betree_search/2,
   iterated_betree_search_all/2,
@@ -111,6 +114,32 @@ iterated_next_output(BetreeFile, EventsFile, EventEvalOutputFile) ->
   be_eval:stop(PidEval),
   Ret.
 
+with_event(BetreeFile, EventsFile) ->
+  {ok, PidEval} = be_eval:start_link(),
+  Ret = be_eval:run(PidEval, "BE-Tree search 'with event'",
+    BetreeFile, EventsFile,
+    fun with_event_betree_search/2, fun stats_collector/2),
+  be_eval:stop(PidEval),
+  Ret.
+
+with_event_stats(BetreeFile, EventsFile, StatsFile) ->
+  {ok, PidEval} = be_eval:start_link(),
+  Ret = be_eval:run(PidEval, "BE-Tree search 'with event'",
+    BetreeFile,
+    EventsFile, fun with_event_betree_search/2, _EventEvalOutputFile = undefined,
+    fun stats_collector/2, StatsFile),
+  be_eval:stop(PidEval),
+  Ret.
+
+with_event_output(BetreeFile, EventsFile, EventEvalOutputFile) ->
+  {ok, PidEval} = be_eval:start_link(),
+  Ret = be_eval:run(PidEval, "BE-Tree search 'with event'",
+    BetreeFile,
+    EventsFile, fun with_event_betree_search/2, EventEvalOutputFile,
+    fun stats_collector/2, undefined),
+  be_eval:stop(PidEval),
+  Ret.
+
 std_betree_search(Term, #be_evaluator{betree = Betree} = Context) ->
   Event = [list_to_tuple(
     [event | [case N of 1 -> true; _ -> false end|| N <- Term]])],
@@ -165,6 +194,23 @@ iterated_betree_search_next(Iterator) ->
     {ok, _Ids} = Ret ->
       Ret;
     X -> {error, {search_next, X}}
+  end.
+
+with_event_betree_search(Term, #be_evaluator{betree = Betree} = Context) ->
+  Event = [list_to_tuple(
+    [event | [case N of 1 -> true; _ -> false end|| N <- Term]])],
+  BeginNano = erlang:monotonic_time(nanosecond),
+  case erl_betree:betree_make_event(Betree, Event) of
+    {{ok, Evt}, _} ->
+      case erl_betree:betree_search(Betree, Evt, 0) of
+        {{ok, Ids}, _} ->
+          EndNano = erlang:monotonic_time(nanosecond),
+          CurrentAllocations = be_bm_utils:betree_allocations(),
+          DiffNano = EndNano - BeginNano,
+          {{ok, {Ids, {DiffNano, CurrentAllocations}}}, Context};
+        X -> {{error, {betree_search_with_event, X}}, Context}
+      end;
+    X -> {{error, {betree_make_event, X}}, Context}
   end.
 
 stats_collector({DiffNano, Allocations}, #be_evaluator_stats{
