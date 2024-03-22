@@ -35,6 +35,7 @@
 
   compare_stats/2,
 
+  combine_expressions_from_files/3,
   combine_expressions_from_files/4
 ]).
 
@@ -389,6 +390,105 @@ compare_stats(BaseFileName, TargetFileName) ->
         X -> X
       end;
     X -> X
+  end.
+
+combine_expressions_from_files(Op, ExprFiles, ExprTarget) ->
+  case check_combine_expressions_params(Op, ExprFiles, ExprTarget) of
+    {ok, {PidReaders, PidWriter}} ->
+      case combine_expressions_parameters_from_files(PidReaders, []) of
+        {error, _Reason} = Err ->
+          [term_reader:stop(P) || {P, _} <- PidReaders],
+          term_writer:stop(PidWriter),
+          Err;
+        {ok, Params} ->
+          term_writer:write(PidWriter, Params),
+          Ret = read_combine_write(Op, PidReaders, PidWriter),
+          [term_reader:stop(P) || {P, _} <- PidReaders],
+          term_writer:stop(PidWriter),
+          Ret
+      end;
+    Err -> Err
+  end.
+
+read_combine_write(Op, PidReaders, PidWriter) ->
+  case collect_row_from_readers(PidReaders, []) of
+    eof -> ok;
+    {error, _Reason} = Err -> Err;
+    {ok, []} -> read_combine_write(Op, PidReaders, PidWriter);
+    {ok, [Expr | Rest]} ->
+      Combined = lists:foldl(fun (E, Bin) -> append_expression(Op, Bin, E) end,
+                    <<$(, Expr/binary, $)>>, Rest),
+      term_writer:write(PidWriter, Combined),
+      read_combine_write(Op, PidReaders, PidWriter)
+  end.
+
+append_expression('and', Expr1, Expr2)
+  when is_binary(Expr1) andalso is_binary(Expr2) ->
+  <<Expr1/binary, " and ", $(, Expr2/binary, $)>>;
+append_expression('or', Expr1, Expr2)
+  when is_binary(Expr1) andalso is_binary(Expr2) ->
+  <<Expr1/binary, " or ", $(, Expr2/binary, $)>>;
+append_expression('and_not', Expr1, Expr2)
+  when is_binary(Expr1) andalso is_binary(Expr2) ->
+  <<Expr1/binary, " and not ", $(, Expr2/binary, $)>>;
+append_expression('or_not', Expr1, Expr2)
+  when is_binary(Expr1) andalso is_binary(Expr2) ->
+  <<Expr1/binary, " or not ", $(, Expr2/binary, $)>>;
+append_expression(Op, Expr1, Expr2) ->
+  {error, {wrong_parameters, Op, Expr1, Expr2}}.
+
+collect_row_from_readers([], Exprs) ->
+  {ok, lists:reverse(Exprs)};
+collect_row_from_readers([{Pid, File} | Rest], Exprs) ->
+  case term_reader:read(Pid) of
+    eof -> eof;
+    {error, Reason} -> {error, {Reason, File}};
+    {ok, Term} ->
+      collect_row_from_readers(Rest, [Term | Exprs])
+  end.
+
+combine_expressions_parameters_from_files([], Params) ->
+  {ok, lists:flatten(lists:reverse(Params))};
+combine_expressions_parameters_from_files([{Pid, File} | Rest], Params) ->
+  case term_reader:read(Pid) of
+    eof -> {error, {no_expression_parameters, File}};
+    {error, Reason} -> {error, {Reason, File}};
+    {ok, Term} ->
+      combine_expressions_parameters_from_files(Rest, [Term | Params])
+  end.
+
+check_combine_expressions_params(Op, ExprFiles, ExprTarget) ->
+  case valid_op(Op) of
+    false -> {error, {invalid_op, Op}};
+    true ->
+      case open_readers(ExprFiles, []) of
+        {error, _Reason} = Err -> Err;
+        {ok, Pids} ->
+          case be_bm_utils:file_exists(ExprTarget) of
+            true ->
+              [term_reader:stop(P) || {P, _} <- Pids],
+              {error, {file_exists_already, ExprTarget}};
+            false ->
+              case term_writer:start_link(ExprTarget) of
+                {ok, PidWriter} ->
+                  {ok, {Pids, PidWriter}};
+                Err ->
+                  [term_reader:stop(P) || {P, _} <- Pids],
+                  Err
+              end
+          end
+      end
+  end.
+
+open_readers([], Pids) ->
+  {ok, lists:reverse(Pids)};
+open_readers([File | Rest], Pids) ->
+  case term_reader:start_link(File) of
+    {ok, Pid} ->
+      open_readers(Rest, [{Pid, File} | Pids]);
+    {error, Reason} ->
+      [term_reader:stop(P) || {P, _} <- Pids],
+      {error, {Reason, File}}
   end.
 
 combine_expressions_from_files(Op, ExprFile1, ExprFile2, ExprTarget) ->
