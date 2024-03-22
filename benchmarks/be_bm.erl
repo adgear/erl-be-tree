@@ -33,7 +33,9 @@
   % compare evaluation outputs
   diff/2,
 
-  compare_stats/2
+  compare_stats/2,
+
+  combine_expressions_from_files/4
 ]).
 
 std(BetreeFile, EventsFile) ->
@@ -388,3 +390,104 @@ compare_stats(BaseFileName, TargetFileName) ->
       end;
     X -> X
   end.
+
+combine_expressions_from_files(Op, ExprFile1, ExprFile2, ExprTarget) ->
+  case check_combine_expressions_params(Op, ExprFile1, ExprFile2, ExprTarget) of
+    {ok, {PidReader1, PidReader2, PidWriter}} ->
+      case combine_expressions_parameters_from_files(PidReader1, PidReader2, PidWriter) of
+        ok ->
+          Ret = combine_expressions_from_files_loop(Op, PidReader1, PidReader2, PidWriter),
+          term_writer:stop(PidWriter),
+          term_reader:stop(PidReader2),
+          term_reader:stop(PidReader1),
+          Ret;
+        Err ->
+          term_writer:stop(PidWriter),
+          term_reader:stop(PidReader2),
+          term_reader:stop(PidReader1),
+          Err
+      end;
+    Err -> Err
+  end.
+
+combine_expressions_from_files_loop(Op, PidReader1, PidReader2, PidWriter) ->
+  case term_reader:read(PidReader1) of
+    eof -> ok;
+    {error, _Reason} = Err -> Err;
+    {ok, Expr1} ->
+      case term_reader:read(PidReader2) of
+        eof -> ok;
+        {error, _Reason} = Err -> Err;
+        {ok, Expr2} ->
+          case combine_expressions(Op, Expr1, Expr2) of
+            {error, _Reason} = Err -> Err;
+            Expr ->
+              term_writer:write(PidWriter, Expr),
+              combine_expressions_from_files_loop(Op, PidReader1, PidReader2, PidWriter)
+          end
+      end
+  end.
+
+combine_expressions('and', Expr1, Expr2)
+  when is_binary(Expr1) andalso is_binary(Expr2) ->
+  <<$(, Expr1/binary, $), " and ", $(, Expr2/binary, $)>>;
+combine_expressions('or', Expr1, Expr2)
+  when is_binary(Expr1) andalso is_binary(Expr2) ->
+  <<$(, Expr1/binary, $), " or ", $(, Expr2/binary, $)>>;
+combine_expressions('and_not', Expr1, Expr2)
+  when is_binary(Expr1) andalso is_binary(Expr2) ->
+  <<$(, Expr1/binary, $), " and not ", $(, Expr2/binary, $)>>;
+combine_expressions('or_not', Expr1, Expr2)
+  when is_binary(Expr1) andalso is_binary(Expr2) ->
+  <<$(, Expr1/binary, $), " or not ", $(, Expr2/binary, $)>>;
+combine_expressions(Op, Expr1, Expr2) ->
+  {error, {wrong_parameters, Op, Expr1, Expr2}}.
+
+combine_expressions_parameters_from_files(PidReader1, PidReader2, PidWriter) ->
+  case term_reader:read(PidReader1) of
+    {ok, Term1} ->
+      case term_reader:read(PidReader2) of
+        {ok, Term2} ->
+          ok = term_writer:write(PidWriter, lists:flatten([Term1, Term2])),
+          ok;
+        Err -> {error, {reader2, Err}}
+      end;
+    Err -> {error, {reader1, Err}}
+  end.
+
+check_combine_expressions_params(Op, ExprFile1, ExprFile2, ExprTarget) ->
+  case valid_op(Op) of
+    false -> {error, {invalid_op, Op}};
+    true ->
+      case term_reader:start_link(ExprFile1) of
+        {ok, PidReader1} ->
+          case term_reader:start_link(ExprFile2) of
+            {ok, PidReader2} ->
+              case be_bm_utils:file_exists(ExprTarget) of
+                true ->
+                  term_reader:stop(PidReader2),
+                  term_reader:stop(PidReader1),
+                  {error, {file_exists_already, ExprTarget}};
+                false ->
+                  case term_writer:start_link(ExprTarget) of
+                    {ok, PidWriter} ->
+                      {ok, {PidReader1, PidReader2, PidWriter}};
+                    Err ->
+                      term_reader:stop(PidReader2),
+                      term_reader:stop(PidReader1),
+                      Err
+                  end
+              end;
+            Error ->
+              term_reader:stop(PidReader1),
+              Error
+          end;
+        Error -> Error
+      end
+  end.
+
+valid_op('and') -> true;
+valid_op('or') -> true;
+valid_op('and_not') -> true;
+valid_op('or_not') -> true;
+valid_op(_) -> false.
