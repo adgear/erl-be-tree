@@ -9,6 +9,7 @@
   better_percentage/1,
 
   file_exists/1,
+  files_exists/1,
 
   betree_allocations/0,
   betree_allocations_diff/2,
@@ -49,6 +50,14 @@ file_exists(FileName) ->
       file:close(Handle),
       true;
     _ -> false
+  end.
+
+files_exists([]) ->
+  ok;
+files_exists([FileName | Rest]) ->
+  case file_exists(FileName) of
+    true -> files_exists(Rest);
+    _ -> {error, {file_does_not_exist, FileName}}
   end.
 
 betree_allocations() ->
