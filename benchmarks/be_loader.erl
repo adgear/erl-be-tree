@@ -13,7 +13,8 @@
   start_link/0,
   start_link/1,
   stop/1,
-  load/2
+  load/2,
+  load_many/2
 ]).
 
 %% gen_server callbacks
@@ -47,6 +48,12 @@ stop(ServerRef) ->
 %% @doc Loads Boolean Expressions from file
 load(ServerRef, FileName) ->
   gen_server:call(ServerRef, {load, FileName}, infinity).
+
+%% @doc Loads Boolean Expressions from files.
+%%  Each file contains boolean expressions for a separate BE-Tree, i.e.
+%%  number of created BE-Trees will correspond to the number of files.
+load_many(ServerRef, FileNames) ->
+  gen_server:call(ServerRef, {load_many, FileNames}, infinity).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -137,6 +144,24 @@ handle_call({load, FileName}, _From, State) ->
                   {reply, Err, State}
               end
           end
+      end
+  end;
+
+handle_call({load_many, FileNames}, _From, State) ->
+  case be_bm_utils:files_exists(FileNames) of
+    {error, _Reason} = Err ->
+      {reply, Err, State};
+    ok ->
+      % Start Evaluator
+      %   with `undefined` evaluator function
+      %   and empty array of contexts
+      {ok, PidEval} = term_eval:start_link(undefined, []),
+      case read_eval(FileNames, PidEval) of
+        {error, Reason} ->
+          term_eval:stop(PidEval),
+          {reply, {error, {failed_to_load_be_tree, Reason}}, State};
+        {ok, BetreeFileNamePairs} ->
+          {reply, {ok, {PidEval, BetreeFileNamePairs}}, State}
       end
   end;
 
@@ -237,6 +262,102 @@ add_stats(_Stats, #be_loader_stats{
         current_nano = CurrentNano}
   end,
   {ok, Stats1}.
+
+read_eval([], PidEval) ->
+  Context = term_eval:get_context(PidEval),
+  term_eval:update_context(PidEval, undefined, undefined),
+  {ok, lists:reverse(Context)};
+read_eval([FileName | Rest], PidEval) ->
+  io:format("Loading BE-Tree from ~p...~n", [FileName]),
+  case term_reader:start_link(FileName) of
+    {error, _Reason} = Err -> Err;
+    {ok, PidReader} ->
+      case read_params(PidReader) of
+        {error, be_tree_parameters_not_provided} ->
+          term_reader:stop(PidReader),
+          {error, {be_tree_parameters_not_provided, FileName}};
+        {error, _Reason} = Err ->
+          term_reader:stop(PidReader),
+          Err;
+        {ok, Term} ->
+          Domains = [Term],
+          case erl_betree:betree_make(Domains) of
+            {ok, Betree} ->
+              Context = term_eval:get_context(PidEval),
+              Consts = [],
+              Index = 0,
+              BeEvaluator = #be_evaluator{
+                betree = Betree,
+                consts = Consts,
+                index = Index
+              },
+              term_eval:update_context(PidEval, fun add_expr/2, BeEvaluator),
+
+              StartTime = calendar:universal_time_to_local_time(erlang:universaltime()),
+              SnapshotFreq = 100,
+              Allocations = be_bm_utils:betree_allocations(),
+              AllocationDiffs = [],
+              NanoDiffs = [],
+              Nano = erlang:monotonic_time(nanosecond),
+              LoaderStats = #be_loader_stats{
+                start_time = StartTime,
+                index = Index,
+                snapshot_freq = SnapshotFreq,
+                initial_allocations = Allocations,
+                current_allocations = Allocations,
+                snapshot_allocations = Allocations,
+                allocation_diffs = AllocationDiffs,
+                initial_nano = Nano,
+                current_nano = Nano,
+                snapshot_nano = Nano,
+                nano_diffs = NanoDiffs},
+              {ok, PidStats} = term_eval:start_link(fun add_stats/2, LoaderStats),
+
+              case read_eval_loop(PidReader, PidEval, PidStats) of
+                ok ->
+                  term_eval:stop(PidStats),
+                  term_reader:stop(PidReader),
+                  Context1 = [{Betree, FileName} | Context],
+                  term_eval:update_context(PidEval, undefined, Context1),
+                  read_eval(Rest, PidEval);
+
+                {error, _Reason} = Err ->
+                  term_eval:stop(PidStats),
+                  term_reader:stop(PidReader),
+                  term_eval:update_context(PidEval, undefined, undefined),
+                  Err
+              end;
+            Err ->
+              term_reader:stop(PidReader),
+              {error, {betree_make, Err, FileName}}
+          end
+      end
+  end.
+
+read_params(PidReader) ->
+  case term_reader:read(PidReader) of
+    eof -> {error, be_tree_parameters_not_provided};
+    {error, _Reason} = Err -> Err;
+    {ok, _Term} = Ret -> Ret
+  end.
+
+read_eval_loop(ReaderId, EvalId, StatsId) ->
+  case term_reader:read(ReaderId) of
+    eof -> ok;
+    {error, _Reason} = Err -> Err;
+
+    {ok, Term} ->
+      case term_eval:eval(EvalId, Term) of
+        {{error, _Reason} = Err, _EvaluatedState} ->
+          Err;
+
+        ok ->
+          Allocations = be_bm_utils:betree_allocations(),
+          Nano = erlang:monotonic_time(nanosecond),
+          term_eval:eval(StatsId, {Allocations, Nano}),
+          read_eval_loop(ReaderId, EvalId, StatsId)
+      end
+  end.
 
 read_eval_stats_loop(ReaderId, EvalId, StatsId) ->
   case term_reader:read(ReaderId) of
