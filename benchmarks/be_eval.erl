@@ -9,8 +9,11 @@
   start_link/0,
   start_link/1,
   stop/1,
+
   run/6,
-  run/8
+  run/8,
+
+  pipe/8
 ]).
 
 %% gen_server callbacks
@@ -49,6 +52,11 @@ run(ServerRef, Info, BetreeFile, EventsFile, EventEvalFunc, StatsFunc) ->
 run(ServerRef, Info, BetreeFile, EventsFile, EventEvalFunc, EventEvalOutputFile, StatsFunc, StatsOutputFile) ->
   gen_server:call(ServerRef,
     {run, Info, BetreeFile, EventsFile, EventEvalFunc, EventEvalOutputFile, StatsFunc, StatsOutputFile},
+    infinity).
+
+pipe(ServerRef, Info, BetreeFiles, EventsFile, EventEvalFunc, EventEvalOutputFile, StatsFunc, StatsOutputFile) ->
+  gen_server:call(ServerRef,
+    {pipe, Info, BetreeFiles, EventsFile, EventEvalFunc, EventEvalOutputFile, StatsFunc, StatsOutputFile},
     infinity).
 
 %%%===================================================================
@@ -140,6 +148,75 @@ handle_call({run, Info, BetreeFile, EventsFile, EventEvalFunc, EventEvalOutputFi
       end
   end;
 
+handle_call({pipe, Info, BetreeFiles, EventsFile, EventEvalFunc, EventEvalOutputFile, StatsFunc, StatsOutputFile},
+    _From, State) ->
+  case be_bm_utils:files_exists(BetreeFiles) of
+    {error, _Reason} = Err ->
+      {reply, Err, State};
+    ok ->
+      case be_bm_utils:file_exists(EventsFile) of
+        false ->
+          {reply, {error, {file_does_not_exist, EventsFile}}, State};
+        true ->
+          {ok, PidLoader} = be_loader:start_link(),
+          case load_many_in_one(PidLoader, BetreeFiles) of
+            {error, _Reason} = Err ->
+              be_loader:stop(PidLoader),
+              {reply, Err, State};
+            {ok, {PidEval, BetreeFileNamePairs}} ->
+              be_loader:stop(PidLoader),
+              {Betrees, FileNames} = lists:unzip(BetreeFileNamePairs),
+              io:format("Participating BE-Trees:~n"),
+              lists:foreach(fun (FN) -> io:format("~p~n", [FN]) end, FileNames),
+              Context = Betrees,
+              {ok, PidReader} = term_reader:start_link(EventsFile),
+              ok = term_eval:update_context(PidEval, EventEvalFunc, Context),
+              {ok, PidWriter} = term_writer:start_link(EventEvalOutputFile),
+
+              StartTime = calendar:universal_time_to_local_time(erlang:universaltime()),
+              Index = 0,
+              SnapshotFreq = 1000,
+              Allocations = be_bm_utils:betree_allocations(),
+              AllocationDiffs = [],
+              SnapshotNanoAcc = 0,
+              NanoDiffs = [],
+              EvaluatorStats = #be_evaluator_stats{
+                start_time = StartTime,
+                info = Info,
+                index = Index,
+                snapshot_freq = SnapshotFreq,
+                initial_allocations = Allocations,
+                current_allocations = Allocations,
+                snapshot_allocations = Allocations,
+                allocation_diffs = AllocationDiffs,
+                snapshot_nano_acc = SnapshotNanoAcc,
+                nano_diffs = NanoDiffs},
+
+              {ok, PidStats} = term_eval:start_link(StatsFunc, EvaluatorStats),
+
+              io:format("Processing events...~n"),
+              case read_eval_loop(PidReader, PidEval, PidWriter, PidStats) of
+                {error, _Reason1} = Err1 ->
+                  term_writer:stop(PidWriter),
+                  term_eval:stop(PidStats),
+                  term_eval:stop(PidEval),
+                  term_reader:stop(PidReader),
+                  {reply, Err1, State};
+
+                ok ->
+                  StatsContext = term_eval:get_context(PidStats),
+                  Stats = report_stats(StatsContext),
+                  be_bm_utils:write_terms(StatsOutputFile, Stats),
+                  term_writer:stop(PidWriter),
+                  term_eval:stop(PidStats),
+                  term_eval:stop(PidEval),
+                  term_reader:stop(PidReader),
+                  {reply, ok, State}
+              end
+          end
+      end
+  end;
+
 handle_call(_Request, _From, State = #be_eval_state{}) ->
   {reply, ok, State}.
 
@@ -182,6 +259,27 @@ code_change(_OldVsn, State = #be_eval_state{}, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+-compile([{nowarn_unused_function, [{load_many_in_many, 3}]}]).
+
+%% Load each BetreeFile in its own process
+load_many_in_many(_PidLoader, [], PidEvals) ->
+  {ok, lists:reverse(PidEvals)};
+load_many_in_many(PidLoader, [BetreeFile | Rest], PidEvals) ->
+  io:format("Loading BE-Tree from ~p...~n", [BetreeFile]),
+  case be_loader:load(PidLoader, BetreeFile) of
+    {ok, {PidEval, _PidStats} = _LoaderRet} ->
+      load_many_in_many(PidLoader, Rest, [PidEval | PidEvals]);
+    Err ->
+      {error, {Err, BetreeFile}}
+  end.
+
+load_many_in_one(PidLoader, BetreeFiles) ->
+  case be_loader:load_many(PidLoader, BetreeFiles) of
+    {error, _Reason} = Err -> Err;
+    {ok, {_PidEval, _BetreeFileNamePairs}} = Ret ->
+      Ret
+  end.
 
 read_eval_loop(PidReader, PidEval, PidWriter, PidStats) ->
   case term_reader:read(PidReader) of % read a term
