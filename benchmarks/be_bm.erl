@@ -13,19 +13,28 @@
   std/2,
   std_stats/3,
   std_output/3,
+  std_betree_search/2,
+
   iterated_all/2,
   iterated_all_stats/3,
   iterated_all_output/3,
+  iterated_betree_search_all/2,
+
   iterated_next/2,
   iterated_next_stats/3,
   iterated_next_output/3,
+  iterated_betree_search_next/2,
+
   with_event/2,
   with_event_stats/3,
   with_event_output/3,
+  with_event_betree_search/2,
 
-  std_betree_search/2,
-  iterated_betree_search_all/2,
-  iterated_betree_search_next/2,
+  pipe/2,
+  pipe_stats/3,
+  pipe_output/3,
+  piped_betree_search/2,
+
   stats_collector/2,
 
   % intersect outputs
@@ -35,9 +44,11 @@
 
   compare_stats/2,
 
-  combine_expressions_from_files/3,
-  combine_expressions_from_files/4
+  combine_expressions_from_files/3
 ]).
+
+%% 'Standard' boolean expressions evaluation section
+%% 'Standard' here means using 'erl_betree:betree_search'.
 
 std(BetreeFile, EventsFile) ->
   {ok, PidEval} = be_eval:start_link(),
@@ -65,6 +76,28 @@ std_output(BetreeFile, EventsFile, EventEvalOutputFile) ->
   be_eval:stop(PidEval),
   Ret.
 
+std_betree_search(Term, #be_evaluator{betree = Betree} = Context) ->
+  Event = [list_to_tuple(
+    [event | [case N of 1 -> true; _ -> false end|| N <- Term]])],
+  BeginNano = erlang:monotonic_time(nanosecond),
+  SearchRet = erl_betree:betree_search(Betree, Event),
+  EndNano = erlang:monotonic_time(nanosecond),
+  CurrentAllocations = be_bm_utils:betree_allocations(),
+  DiffNano = EndNano - BeginNano,
+  case SearchRet of
+    {ok, Ids} -> {{ok, {Ids, {DiffNano, CurrentAllocations}}}, Context};
+    X -> {{error, {betree_search, X}}, Context}
+  end.
+
+%% 'Standard' boolean expressions evaluation section. End
+
+%% With iterator boolean expressions evaluation section
+%% Has 2 sub-sections:
+%%  - using 'erl_betree:search_iterator' / 'erl_betree:search_all' pair;
+%%  - using 'erl_betree:search_iterator' / 'erl_betree:search_next' pair.
+
+%% Using 'erl_betree:search_iterator' / 'erl_betree:search_all' pair sub-section
+
 iterated_all(BetreeFile, EventsFile) ->
   {ok, PidEval} = be_eval:start_link(),
   Ret = be_eval:run(PidEval, "BE-Tree search event with iterator, all subscriptions",
@@ -90,6 +123,27 @@ iterated_all_output(BetreeFile, EventsFile, EventEvalOutputFile) ->
     fun stats_collector/2, undefined),
   be_eval:stop(PidEval),
   Ret.
+
+iterated_betree_search_all(Term, #be_evaluator{betree = Betree} = Context) ->
+  Event = [list_to_tuple(
+    [event | [case N of 1 -> true; _ -> false end|| N <- Term]])],
+  BeginNano = erlang:monotonic_time(nanosecond),
+  case erl_betree:search_iterator(Betree, Event) of
+    {ok, {Iterator, _, _}} ->
+      case erl_betree:search_all(Iterator) of
+        {ok, Ids} ->
+          EndNano = erlang:monotonic_time(nanosecond),
+          CurrentAllocations = be_bm_utils:betree_allocations(),
+          DiffNano = EndNano - BeginNano,
+          {{ok, {Ids, {DiffNano, CurrentAllocations}}}, Context};
+        X -> {{error, {search_all, X}}, Context}
+      end;
+    X -> {{error, {search_iterator, X}}, Context}
+  end.
+
+%% Using 'erl_betree:search_iterator' / 'erl_betree:search_all' pair sub-section. End
+
+%% Using 'erl_betree:search_iterator' / 'erl_betree:search_next' pair sub-section
 
 iterated_next(BetreeFile, EventsFile) ->
   {ok, PidEval} = be_eval:start_link(),
@@ -117,62 +171,6 @@ iterated_next_output(BetreeFile, EventsFile, EventEvalOutputFile) ->
   be_eval:stop(PidEval),
   Ret.
 
-with_event(BetreeFile, EventsFile) ->
-  {ok, PidEval} = be_eval:start_link(),
-  Ret = be_eval:run(PidEval, "BE-Tree search 'with event'",
-    BetreeFile, EventsFile,
-    fun with_event_betree_search/2, fun stats_collector/2),
-  be_eval:stop(PidEval),
-  Ret.
-
-with_event_stats(BetreeFile, EventsFile, StatsFile) ->
-  {ok, PidEval} = be_eval:start_link(),
-  Ret = be_eval:run(PidEval, "BE-Tree search 'with event'",
-    BetreeFile,
-    EventsFile, fun with_event_betree_search/2, _EventEvalOutputFile = undefined,
-    fun stats_collector/2, StatsFile),
-  be_eval:stop(PidEval),
-  Ret.
-
-with_event_output(BetreeFile, EventsFile, EventEvalOutputFile) ->
-  {ok, PidEval} = be_eval:start_link(),
-  Ret = be_eval:run(PidEval, "BE-Tree search 'with event'",
-    BetreeFile,
-    EventsFile, fun with_event_betree_search/2, EventEvalOutputFile,
-    fun stats_collector/2, undefined),
-  be_eval:stop(PidEval),
-  Ret.
-
-std_betree_search(Term, #be_evaluator{betree = Betree} = Context) ->
-  Event = [list_to_tuple(
-    [event | [case N of 1 -> true; _ -> false end|| N <- Term]])],
-  BeginNano = erlang:monotonic_time(nanosecond),
-  SearchRet = erl_betree:betree_search(Betree, Event),
-  EndNano = erlang:monotonic_time(nanosecond),
-  CurrentAllocations = be_bm_utils:betree_allocations(),
-  DiffNano = EndNano - BeginNano,
-  case SearchRet of
-    {ok, Ids} -> {{ok, {Ids, {DiffNano, CurrentAllocations}}}, Context};
-    X -> {{error, {betree_search, X}}, Context}
-  end.
-
-iterated_betree_search_all(Term, #be_evaluator{betree = Betree} = Context) ->
-  Event = [list_to_tuple(
-    [event | [case N of 1 -> true; _ -> false end|| N <- Term]])],
-  BeginNano = erlang:monotonic_time(nanosecond),
-  case erl_betree:search_iterator(Betree, Event) of
-    {ok, {Iterator, _, _}} ->
-      case erl_betree:search_all(Iterator) of
-        {ok, Ids} ->
-          EndNano = erlang:monotonic_time(nanosecond),
-          CurrentAllocations = be_bm_utils:betree_allocations(),
-          DiffNano = EndNano - BeginNano,
-          {{ok, {Ids, {DiffNano, CurrentAllocations}}}, Context};
-        X -> {{error, {search_all, X}}, Context}
-      end;
-    X -> {{error, {search_iterator, X}}, Context}
-  end.
-
 iterated_betree_search_next(Term, #be_evaluator{betree = Betree} = Context) ->
   Event = [list_to_tuple(
     [event | [case N of 1 -> true; _ -> false end|| N <- Term]])],
@@ -199,6 +197,39 @@ iterated_betree_search_next(Iterator) ->
     X -> {error, {search_next, X}}
   end.
 
+%% Using 'erl_betree:search_iterator' / 'erl_betree:search_next' pair sub-section. End
+
+%% With iterator boolean expressions evaluation section. End
+
+%% 'With event' boolean expressions evaluation section
+%% 'With event' here means using 'erl_betree:betree_make_event' / 'erl_betree:betree_search' pair.
+
+with_event(BetreeFile, EventsFile) ->
+  {ok, PidEval} = be_eval:start_link(),
+  Ret = be_eval:run(PidEval, "BE-Tree search 'with event'",
+    BetreeFile, EventsFile,
+    fun with_event_betree_search/2, fun stats_collector/2),
+  be_eval:stop(PidEval),
+  Ret.
+
+with_event_stats(BetreeFile, EventsFile, StatsFile) ->
+  {ok, PidEval} = be_eval:start_link(),
+  Ret = be_eval:run(PidEval, "BE-Tree search 'with event'",
+    BetreeFile,
+    EventsFile, fun with_event_betree_search/2, _EventEvalOutputFile = undefined,
+    fun stats_collector/2, StatsFile),
+  be_eval:stop(PidEval),
+  Ret.
+
+with_event_output(BetreeFile, EventsFile, EventEvalOutputFile) ->
+  {ok, PidEval} = be_eval:start_link(),
+  Ret = be_eval:run(PidEval, "BE-Tree search 'with event'",
+    BetreeFile,
+    EventsFile, fun with_event_betree_search/2, EventEvalOutputFile,
+    fun stats_collector/2, undefined),
+  be_eval:stop(PidEval),
+  Ret.
+
 with_event_betree_search(Term, #be_evaluator{betree = Betree} = Context) ->
   Event = [list_to_tuple(
     [event | [case N of 1 -> true; _ -> false end|| N <- Term]])],
@@ -215,6 +246,92 @@ with_event_betree_search(Term, #be_evaluator{betree = Betree} = Context) ->
       end;
     X -> {{error, {betree_make_event, X}}, Context}
   end.
+
+%% 'With event' boolean expressions evaluation section. End
+
+%% 'Piped' boolean expressions evaluation section
+%% 'Pipe' here means the following:
+%% If a (parametrized) boolean expression 'Expr' can be represented as
+%% Expr(P1,..,Pn) = Expr1(P1,..,Pn) and Expr2(P1,..,Pn) and Expr3(P1,..,Pn),
+%% then
+%% the application of Expr(P1,..,Pn) to values (V1,...,Vn) can be represented as
+%% (Expr1(P1,..,Pn)(V1,...,Vn) 'intersection with' Expr2(P1,..,Pn)(V1,...,Vn))
+%% 'intersection with' Expr3(P1,..,Pn)(V1,...,Vn),
+%% in other words (V1,...,Vn) passes through the pipe of Expr1(P1,..,Pn), Expr2(P1,..,Pn), Expr3(P1,..,Pn).
+
+pipe(BetreeFiles, EventsFile) ->
+  {ok, PidEval} = be_eval:start_link(),
+  EventEvalFunc = fun piped_betree_search/2,
+  EventEvalOutputFile = undefined,
+  StatsFunc = fun stats_collector/2,
+  StatsOutputFile = undefined,
+  Ret = be_eval:pipe(PidEval, "BE-Tree pipe",
+    BetreeFiles,
+    EventsFile, EventEvalFunc, EventEvalOutputFile,
+    StatsFunc, StatsOutputFile),
+  be_eval:stop(PidEval),
+  Ret.
+
+pipe_stats(BetreeFiles, EventsFile, StatsFile) ->
+  {ok, PidEval} = be_eval:start_link(),
+  EventEvalFunc = fun piped_betree_search/2,
+  EventEvalOutputFile = undefined,
+  StatsFunc = fun stats_collector/2,
+  StatsOutputFile = StatsFile,
+  Ret = be_eval:pipe(PidEval, "BE-Tree pipe",
+    BetreeFiles,
+    EventsFile, EventEvalFunc, EventEvalOutputFile,
+    StatsFunc, StatsOutputFile),
+  be_eval:stop(PidEval),
+  Ret.
+
+pipe_output(BetreeFiles, EventsFile, OutputFile) ->
+  {ok, PidEval} = be_eval:start_link(),
+  EventEvalFunc = fun piped_betree_search/2,
+  EventEvalOutputFile = OutputFile,
+  StatsFunc = fun stats_collector/2,
+  StatsOutputFile = undefined,
+  Ret = be_eval:pipe(PidEval, "BE-Tree pipe",
+    BetreeFiles,
+    EventsFile, EventEvalFunc, EventEvalOutputFile,
+    StatsFunc, StatsOutputFile),
+  be_eval:stop(PidEval),
+  Ret.
+
+piped_betree_search(Term, [Betree | Rest] = Context) ->
+  Event = [list_to_tuple(
+    [event | [case N of 1 -> true; _ -> false end|| N <- Term]])],
+  BeginNano = erlang:monotonic_time(nanosecond),
+  case erl_betree:betree_make_event(Betree, Event) of
+    {{ok, Evt}, _} ->
+      case erl_betree:betree_search(Betree, Evt, 0) of
+        {{ok, Ids}, _} ->
+          EndNano = erlang:monotonic_time(nanosecond),
+          DiffNano = EndNano - BeginNano,
+          case piped_betree_search_with_made_event(Rest, Evt, Ids, DiffNano) of
+            {ok, {Ids1, DiffNano1}} ->
+              CurrentAllocations = be_bm_utils:betree_allocations(),
+              {{ok, {Ids1, {DiffNano1, CurrentAllocations}}}, Context};
+            X -> {{error, {piped_betree_search_with_made_event, X}}, Context}
+          end;
+        X -> {{error, {betree_search_with_event, X}}, Context}
+      end;
+    X -> {{error, {betree_make_event, X}}, Context}
+  end.
+
+piped_betree_search_with_made_event([] = _Context, _Event, Ids, DiffNano) ->
+  {ok, {Ids, DiffNano}};
+piped_betree_search_with_made_event([Betree | Rest] = _Context, Event, Ids, DiffNano) ->
+  BeginNano = erlang:monotonic_time(nanosecond),
+  case erl_betree:betree_search_ids(Betree, Event, Ids, 0) of
+    {{ok, Ids1}, _} ->
+      EndNano = erlang:monotonic_time(nanosecond),
+      DiffNano1 = EndNano - BeginNano,
+      piped_betree_search_with_made_event(Rest, Event, Ids1, DiffNano + DiffNano1);
+    X -> {error, {betree_search_ids, X}}
+  end.
+
+%% 'Piped' boolean expressions evaluation section. End
 
 stats_collector({DiffNano, Allocations}, #be_evaluator_stats{
   info = Info,
@@ -287,11 +404,16 @@ intersect(PidIn1, PidIn2, PidOut) when
 intersect(_, _, _) ->
   {error, wrong_parameters}.
 
-
 diff(FileName1, FileName2) ->
-  {ok, _} = term_reader:start_link(in1, FileName1),
-  {ok, _} = term_reader:start_link(in2, FileName2),
-  diff(in1, in2, 0, []).
+%%  {ok, _} = term_reader:start_link(in1, FileName1),
+%%  {ok, _} = term_reader:start_link(in2, FileName2),
+%%  diff(in1, in2, 0, []).
+  {ok, Reader1} = term_reader:start_link(FileName1),
+  {ok, Reader2} = term_reader:start_link(FileName2),
+  Ret = diff(Reader1, Reader2, 0, []),
+  term_reader:stop(Reader2),
+  term_reader:stop(Reader1),
+  Ret.
 
 diff(Reader1, Reader2, Index, Acc) ->
   Index1 = Index + 1,
@@ -410,6 +532,16 @@ combine_expressions_from_files(Op, ExprFiles, ExprTarget) ->
     Err -> Err
   end.
 
+combine_expressions_parameters_from_files([], Params) ->
+  {ok, lists:flatten(lists:reverse(Params))};
+combine_expressions_parameters_from_files([{Pid, File} | Rest], Params) ->
+  case term_reader:read(Pid) of
+    eof -> {error, {no_expression_parameters, File}};
+    {error, Reason} -> {error, {Reason, File}};
+    {ok, Term} ->
+      combine_expressions_parameters_from_files(Rest, [Term | Params])
+  end.
+
 read_combine_write(Op, PidReaders, PidWriter) ->
   case collect_row_from_readers(PidReaders, []) of
     eof -> ok;
@@ -447,16 +579,6 @@ collect_row_from_readers([{Pid, File} | Rest], Exprs) ->
       collect_row_from_readers(Rest, [Term | Exprs])
   end.
 
-combine_expressions_parameters_from_files([], Params) ->
-  {ok, lists:flatten(lists:reverse(Params))};
-combine_expressions_parameters_from_files([{Pid, File} | Rest], Params) ->
-  case term_reader:read(Pid) of
-    eof -> {error, {no_expression_parameters, File}};
-    {error, Reason} -> {error, {Reason, File}};
-    {ok, Term} ->
-      combine_expressions_parameters_from_files(Rest, [Term | Params])
-  end.
-
 check_combine_expressions_params(Op, ExprFiles, ExprTarget) ->
   case valid_op(Op) of
     false -> {error, {invalid_op, Op}};
@@ -489,101 +611,6 @@ open_readers([File | Rest], Pids) ->
     {error, Reason} ->
       [term_reader:stop(P) || {P, _} <- Pids],
       {error, {Reason, File}}
-  end.
-
-combine_expressions_from_files(Op, ExprFile1, ExprFile2, ExprTarget) ->
-  case check_combine_expressions_params(Op, ExprFile1, ExprFile2, ExprTarget) of
-    {ok, {PidReader1, PidReader2, PidWriter}} ->
-      case combine_expressions_parameters_from_files(PidReader1, PidReader2, PidWriter) of
-        ok ->
-          Ret = combine_expressions_from_files_loop(Op, PidReader1, PidReader2, PidWriter),
-          term_writer:stop(PidWriter),
-          term_reader:stop(PidReader2),
-          term_reader:stop(PidReader1),
-          Ret;
-        Err ->
-          term_writer:stop(PidWriter),
-          term_reader:stop(PidReader2),
-          term_reader:stop(PidReader1),
-          Err
-      end;
-    Err -> Err
-  end.
-
-combine_expressions_from_files_loop(Op, PidReader1, PidReader2, PidWriter) ->
-  case term_reader:read(PidReader1) of
-    eof -> ok;
-    {error, _Reason} = Err -> Err;
-    {ok, Expr1} ->
-      case term_reader:read(PidReader2) of
-        eof -> ok;
-        {error, _Reason} = Err -> Err;
-        {ok, Expr2} ->
-          case combine_expressions(Op, Expr1, Expr2) of
-            {error, _Reason} = Err -> Err;
-            Expr ->
-              term_writer:write(PidWriter, Expr),
-              combine_expressions_from_files_loop(Op, PidReader1, PidReader2, PidWriter)
-          end
-      end
-  end.
-
-combine_expressions('and', Expr1, Expr2)
-  when is_binary(Expr1) andalso is_binary(Expr2) ->
-  <<$(, Expr1/binary, $), " and ", $(, Expr2/binary, $)>>;
-combine_expressions('or', Expr1, Expr2)
-  when is_binary(Expr1) andalso is_binary(Expr2) ->
-  <<$(, Expr1/binary, $), " or ", $(, Expr2/binary, $)>>;
-combine_expressions('and_not', Expr1, Expr2)
-  when is_binary(Expr1) andalso is_binary(Expr2) ->
-  <<$(, Expr1/binary, $), " and not ", $(, Expr2/binary, $)>>;
-combine_expressions('or_not', Expr1, Expr2)
-  when is_binary(Expr1) andalso is_binary(Expr2) ->
-  <<$(, Expr1/binary, $), " or not ", $(, Expr2/binary, $)>>;
-combine_expressions(Op, Expr1, Expr2) ->
-  {error, {wrong_parameters, Op, Expr1, Expr2}}.
-
-combine_expressions_parameters_from_files(PidReader1, PidReader2, PidWriter) ->
-  case term_reader:read(PidReader1) of
-    {ok, Term1} ->
-      case term_reader:read(PidReader2) of
-        {ok, Term2} ->
-          ok = term_writer:write(PidWriter, lists:flatten([Term1, Term2])),
-          ok;
-        Err -> {error, {reader2, Err}}
-      end;
-    Err -> {error, {reader1, Err}}
-  end.
-
-check_combine_expressions_params(Op, ExprFile1, ExprFile2, ExprTarget) ->
-  case valid_op(Op) of
-    false -> {error, {invalid_op, Op}};
-    true ->
-      case term_reader:start_link(ExprFile1) of
-        {ok, PidReader1} ->
-          case term_reader:start_link(ExprFile2) of
-            {ok, PidReader2} ->
-              case be_bm_utils:file_exists(ExprTarget) of
-                true ->
-                  term_reader:stop(PidReader2),
-                  term_reader:stop(PidReader1),
-                  {error, {file_exists_already, ExprTarget}};
-                false ->
-                  case term_writer:start_link(ExprTarget) of
-                    {ok, PidWriter} ->
-                      {ok, {PidReader1, PidReader2, PidWriter}};
-                    Err ->
-                      term_reader:stop(PidReader2),
-                      term_reader:stop(PidReader1),
-                      Err
-                  end
-              end;
-            Error ->
-              term_reader:stop(PidReader1),
-              Error
-          end;
-        Error -> Error
-      end
   end.
 
 valid_op('and') -> true;
