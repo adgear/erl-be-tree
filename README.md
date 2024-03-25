@@ -21,7 +21,7 @@ The following experiments are currently implemented:
 - `with event`: using `erl_betree:betree_make_event/2` / `erl_betree:betree_search/3`;
 - `piped`: `erl_betree:betree_make_event/2` / `erl_betree:betree_search/3` / `erl_betree:betree_search_ids/4`.
 
-The following data for experiments are provided:
+The following data for experiments are provided (`benchmarks/data/boolean_expressions_and_events.zip`):
 - 64 parameters, 5,000 boolean expressions, 100,000 events:
   
   directory `benchmarks/data`, files:
@@ -38,7 +38,7 @@ The following data for experiments are provided:
   - `P_128_Ex_5_000.txt` - boolean expressions;
   - `P_128_Ev_100_000.txt` - events.
 
-For the `piped` experiments the data are in `benchmarks/data/piped` directory.
+For the `piped` experiments the data are in `benchmarks/data/pipe/pipe_boolean_expressions_and_events.zip`.
 
 Instructions how to run experiments are below in corresponding chapters.
 
