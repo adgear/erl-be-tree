@@ -14,12 +14,12 @@ NOTE: The `benchmark` experiments depend only on
 - and C `be-tree` project.  
 
 The following experiments are currently implemented:
-- `baseline`: boolean expressions evaluation using `erl_betree:betree_search/2`;
-- `with iterator`: evaluation using
+- [`baseline`](https://github.com/adgear/erl-be-tree/tree/benchmark?tab=readme-ov-file#baseline): boolean expressions evaluation using `erl_betree:betree_search/2`;
+- [`with iterator`](https://github.com/adgear/erl-be-tree/tree/benchmark?tab=readme-ov-file#with-iterator): evaluation using
   - `erl_betree:search_iterator/2` / `erl_betree:search_all/1`;
   - or `erl_betree:search_iterator/2` / `erl_betree:search_next/1`;
 - `with event`: using `erl_betree:betree_make_event/2` / `erl_betree:betree_search/3`;
-- `piped`: `erl_betree:betree_make_event/2` / `erl_betree:betree_search/3` / `erl_betree:betree_search_ids/4`.
+- [`piped`](https://github.com/adgear/erl-be-tree/tree/benchmark?tab=readme-ov-file#piped-experiment): `erl_betree:betree_make_event/2` / `erl_betree:betree_search/3` / `erl_betree:betree_search_ids/4`.
 
 The following data for experiments are provided (`benchmarks/data/boolean_expressions_and_events.zip`):
 - 64 parameters, 5,000 boolean expressions, 100,000 events:
