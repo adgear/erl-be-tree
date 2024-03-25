@@ -1,8 +1,8 @@
-# erl_betree - `benchmarks` branch for boolean expressions evaluation
+# erl_betree - `benchmark` branch for boolean expressions evaluation
 
 ## Overview
 
-`benchmarks` branch provides functions and benchmark data to
+`benchmark` branch provides functions and benchmark data to
 - run experiments related to boolean expressions evaluations;
 - collect experiments statistics;
 - compare statistics from different experiments;
