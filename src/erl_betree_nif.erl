@@ -5,11 +5,16 @@
 
 -export([
     betree_make/1,
+    betree_make_event/3,
     betree_make_sub/4,
     betree_insert_sub/2,
     betree_exists/2,
     betree_search/2,
     betree_search/3,
+    betree_search_evt/3,
+    betree_search_evt/4,
+    betree_search_ids/4,
+    betree_write_dot/2,
     search_iterator/2,
     search_next/1,
     search_all/1,
@@ -39,6 +44,8 @@ nif_stub_error(Line) ->
 
 betree_make(_Domains) ->
     ?nif_stub.
+betree_make_event(_Betree, _Event, _ClockType) ->
+    ?nif_stub.
 betree_make_sub(_Betree, _SubId, _Constants, _Expr) ->
     ?nif_stub.
 betree_insert_sub(_Betree, _Sub) ->
@@ -48,6 +55,15 @@ betree_exists(_Betree, _Event) ->
 betree_search(_Betree, _Event) ->
     ?nif_stub.
 betree_search(_Betree, _Event, _ClockType) ->
+    ?nif_stub.
+betree_search_evt(_Betree, _Event, _ClockType) ->
+    ?nif_stub.
+betree_search_evt(_Betree, _Event, _Ids, _ClockType) ->
+    ?nif_stub.
+betree_search_ids(_Betree, _Event, _Ids, _ClockType) ->
+    ?nif_stub.
+
+betree_write_dot(_Betree, _FileName) ->
     ?nif_stub.
 
 search_iterator(_Betree, _Event) ->
