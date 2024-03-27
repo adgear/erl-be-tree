@@ -831,6 +831,9 @@ static ERL_NIF_TERM nif_betree_make_event(ErlNifEnv* env, int argc, const ERL_NI
         pred_index += (tuple_len - 1);
     }
 
+    fill_event(betree->config, event);
+    sort_event_lists(event);
+
     retval = enif_make_tuple(env, 2, atom_ok, erl_event);
 
     cleanup:
