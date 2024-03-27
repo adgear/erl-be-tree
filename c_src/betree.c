@@ -768,6 +768,18 @@ cleanup:
     return retval;
 }
 
+// Make sure that clock_gettime will work correctly on different Linux flavors.
+int reverse_get_clock_type(int ct) {
+	int res = CLOCK_MONOTONIC;
+	switch (ct) {
+		case 0 : res = CLOCK_REALTIME; break;
+		case 1 : res = CLOCK_MONOTONIC; break;
+		case 2 : res = CLOCK_PROCESS_CPUTIME_ID; break;
+		case 3 : res = CLOCK_THREAD_CPUTIME_ID; break;
+	}
+	return res;
+}
+
 static ERL_NIF_TERM nif_betree_make_event(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
     ERL_NIF_TERM retval;
@@ -783,6 +795,7 @@ static ERL_NIF_TERM nif_betree_make_event(ErlNifEnv* env, int argc, const ERL_NI
     if (!enif_get_int(env, argv[2], &clock_type)) {
         return enif_make_badarg(env);
     }
+    clock_type = reverse_get_clock_type(clock_type);
     struct timespec start, done;
     clock_gettime(clock_type, &start);
 
@@ -1055,10 +1068,11 @@ static ERL_NIF_TERM nif_betree_search_t(ErlNifEnv* env, int argc, const ERL_NIF_
         return enif_make_badarg(env);
     }
 
-    int clock_type;
+    int clock_type = 0;
     if (!enif_get_int(env, argv[2], &clock_type)) {
 	    return enif_make_badarg(env);
     }
+    clock_type = reverse_get_clock_type(clock_type);
     struct timespec start, done;
     clock_gettime(clock_type, &start);
     ERL_NIF_TERM search_res = nif_betree_search(env, argc - 1, argv);
@@ -1085,6 +1099,7 @@ static ERL_NIF_TERM nif_betree_search_evt(ErlNifEnv* env, int argc, const ERL_NI
     if (!enif_get_int(env, argv[2], &clock_type)) {
 	    return enif_make_badarg(env);
     }
+    clock_type = reverse_get_clock_type(clock_type);
     struct timespec start, done;
     clock_gettime(clock_type, &start);
 
@@ -1136,6 +1151,7 @@ static ERL_NIF_TERM nif_betree_search_evt_ids(ErlNifEnv* env, int argc, const ER
     if (!enif_get_int(env, argv[3], &clock_type)) {
 	    return enif_make_badarg(env);
     }
+    clock_type = reverse_get_clock_type(clock_type);
     struct timespec start, done;
     clock_gettime(clock_type, &start);
 
@@ -1217,6 +1233,7 @@ static ERL_NIF_TERM nif_betree_search_ids(ErlNifEnv* env, int argc, const ERL_NI
     if (!enif_get_int(env, argv[3], &clock_type)) {
 	    return enif_make_badarg(env);
     }
+    clock_type = reverse_get_clock_type(clock_type);
     struct timespec start, done;
     clock_gettime(clock_type, &start);
 
