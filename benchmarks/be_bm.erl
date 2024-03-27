@@ -35,6 +35,11 @@
   pipe_output/3,
   piped_betree_search/2,
 
+  pipe_without_compiled_event/2,
+  pipe_without_compiled_event_stats/3,
+  pipe_without_compiled_event_output/3,
+  piped_without_compiled_event_betree_search/2,
+
   stats_collector/2,
 
   % intersect outputs
@@ -332,6 +337,79 @@ piped_betree_search_with_made_event([Betree | Rest] = _Context, Event, Ids, Diff
   end.
 
 %% 'Piped' boolean expressions evaluation section. End
+
+%% 'Piped without compiled event' boolean expressions evaluation section
+
+pipe_without_compiled_event(BetreeFiles, EventsFile) ->
+  {ok, PidEval} = be_eval:start_link(),
+  EventEvalFunc = fun piped_without_compiled_event_betree_search/2,
+  EventEvalOutputFile = undefined,
+  StatsFunc = fun stats_collector/2,
+  StatsOutputFile = undefined,
+  Ret = be_eval:pipe(PidEval, "BE-Tree pipe without compiled event",
+    BetreeFiles,
+    EventsFile, EventEvalFunc, EventEvalOutputFile,
+    StatsFunc, StatsOutputFile),
+  be_eval:stop(PidEval),
+  Ret.
+
+pipe_without_compiled_event_stats(BetreeFiles, EventsFile, StatsFile) ->
+  {ok, PidEval} = be_eval:start_link(),
+  EventEvalFunc = fun piped_without_compiled_event_betree_search/2,
+  EventEvalOutputFile = undefined,
+  StatsFunc = fun stats_collector/2,
+  StatsOutputFile = StatsFile,
+  Ret = be_eval:pipe(PidEval, "BE-Tree pipe without compiled event",
+    BetreeFiles,
+    EventsFile, EventEvalFunc, EventEvalOutputFile,
+    StatsFunc, StatsOutputFile),
+  be_eval:stop(PidEval),
+  Ret.
+
+pipe_without_compiled_event_output(BetreeFiles, EventsFile, OutputFile) ->
+  {ok, PidEval} = be_eval:start_link(),
+  EventEvalFunc = fun piped_without_compiled_event_betree_search/2,
+  EventEvalOutputFile = OutputFile,
+  StatsFunc = fun stats_collector/2,
+  StatsOutputFile = undefined,
+  Ret = be_eval:pipe(PidEval, "BE-Tree pipe without compiled event",
+    BetreeFiles,
+    EventsFile, EventEvalFunc, EventEvalOutputFile,
+    StatsFunc, StatsOutputFile),
+  be_eval:stop(PidEval),
+  Ret.
+
+piped_without_compiled_event_betree_search(Term, [Betree | Rest] = Context) ->
+  Event = [list_to_tuple(
+    [event | [case N of 1 -> true; _ -> false end|| N <- Term]])],
+  BeginNano = erlang:monotonic_time(nanosecond),
+  case erl_betree:betree_search(Betree, Event, 0) of
+    {{ok, Ids}, _} ->
+      EndNano = erlang:monotonic_time(nanosecond),
+      DiffNano = EndNano - BeginNano,
+      case piped_betree_search_without_compiled_event(Rest, Event, Ids, DiffNano) of
+        {ok, {Ids1, DiffNano1}} ->
+          CurrentAllocations = be_bm_utils:betree_allocations(),
+          {{ok, {Ids1, {DiffNano1, CurrentAllocations}}}, Context};
+        X -> {{error, {piped_betree_search_without_compiled_event, X}}, Context}
+      end;
+    X -> {{error, {betree_search, X}}, Context}
+  end.
+
+piped_betree_search_without_compiled_event([] = _Context, _Event, Ids, DiffNano) ->
+  {ok, {Ids, DiffNano}};
+piped_betree_search_without_compiled_event([Betree | Rest] = _Context, Event, Ids, DiffNano) ->
+  BeginNano = erlang:monotonic_time(nanosecond),
+  case erl_betree:betree_search_ids(Betree, Event, Ids, 0) of
+    {{ok, Ids1}, _} ->
+      EndNano = erlang:monotonic_time(nanosecond),
+      DiffNano1 = EndNano - BeginNano,
+      piped_betree_search_with_made_event(Rest, Event, Ids1, DiffNano + DiffNano1);
+    X -> {error, {betree_search_ids, X}}
+  end.
+
+%% 'Piped without compiled event' boolean expressions evaluation section. End
+
 
 stats_collector({DiffNano, Allocations}, #be_evaluator_stats{
   info = Info,
