@@ -16,8 +16,11 @@ all() ->
     "benchmarks/term_eval.erl",
     "benchmarks/be_loader.erl",
     "benchmarks/be_eval.erl",
+    "benchmarks/be.erl",
+    "benchmarks/be_tools.erl",
     "benchmarks/be_bm_utils.erl",
-    "benchmarks/be_bm.erl"
+    "benchmarks/be_bm.erl",
+    "benchmarks/be_experiment.erl"
   ],
   compile(Files, []).
 
