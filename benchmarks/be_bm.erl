@@ -40,6 +40,11 @@
   pipe_without_compiled_event_output/3,
   piped_without_compiled_event_betree_search/2,
 
+  pipe_with_cached_ids/2,
+  pipe_with_cached_ids_stats/3,
+  pipe_with_cached_ids_output/3,
+  piped_with_cached_ids_betree_search/2,
+
   stats_collector/2,
 
   % intersect outputs
@@ -410,6 +415,86 @@ piped_betree_search_without_compiled_event([Betree | Rest] = _Context, Event, Id
 
 %% 'Piped without compiled event' boolean expressions evaluation section. End
 
+%% 'Piped with cached ids' boolean expressions evaluation section
+
+pipe_with_cached_ids(BetreeFiles, EventsFile) ->
+  {ok, PidEval} = be_eval:start_link(),
+  EventEvalFunc = fun piped_with_cached_ids_betree_search/2,
+  EventEvalOutputFile = undefined,
+  StatsFunc = fun stats_collector/2,
+  StatsOutputFile = undefined,
+  Ret = be_eval:pipe(PidEval, "BE-Tree pipe with cached ids",
+    BetreeFiles,
+    EventsFile, EventEvalFunc, EventEvalOutputFile,
+    StatsFunc, StatsOutputFile),
+  be_eval:stop(PidEval),
+  Ret.
+
+pipe_with_cached_ids_stats(BetreeFiles, EventsFile, StatsFile) ->
+  {ok, PidEval} = be_eval:start_link(),
+  EventEvalFunc = fun piped_without_compiled_event_betree_search/2,
+  EventEvalOutputFile = undefined,
+  StatsFunc = fun stats_collector/2,
+  StatsOutputFile = StatsFile,
+  Ret = be_eval:pipe(PidEval, "BE-Tree pipe with cached ids",
+    BetreeFiles,
+    EventsFile, EventEvalFunc, EventEvalOutputFile,
+    StatsFunc, StatsOutputFile),
+  be_eval:stop(PidEval),
+  Ret.
+
+pipe_with_cached_ids_output(BetreeFiles, EventsFile, OutputFile) ->
+  {ok, PidEval} = be_eval:start_link(),
+  EventEvalFunc = fun piped_without_compiled_event_betree_search/2,
+  EventEvalOutputFile = OutputFile,
+  StatsFunc = fun stats_collector/2,
+  StatsOutputFile = undefined,
+  Ret = be_eval:pipe(PidEval, "BE-Tree pipe with cached ids",
+    BetreeFiles,
+    EventsFile, EventEvalFunc, EventEvalOutputFile,
+    StatsFunc, StatsOutputFile),
+  be_eval:stop(PidEval),
+  Ret.
+
+piped_with_cached_ids_betree_search(Term, [Betree | Rest] = Context) ->
+  Event = [list_to_tuple(
+    [event | [case N of 1 -> true; _ -> false end|| N <- Term]])],
+  BeginNano = erlang:monotonic_time(nanosecond),
+  case erl_betree:search_and_cache_ids(Betree, Event) of
+    {ok, _Ids, CachedIds} ->
+      EndNano = erlang:monotonic_time(nanosecond),
+      DiffNano = EndNano - BeginNano,
+      case piped_betree_search_with_cached_ids(Rest, Event, CachedIds, DiffNano) of
+        {ok, {Ids1, DiffNano1}} ->
+          CurrentAllocations = be_bm_utils:betree_allocations(),
+          {{ok, {Ids1, {DiffNano1, CurrentAllocations}}}, Context};
+        X -> {{error, {piped_betree_search_with_cached_ids, X}}, Context}
+      end;
+    X -> {{error, {search_and_cache_ids, X}}, Context}
+  end.
+
+piped_betree_search_with_cached_ids([] = _Context, _Event, _CachedIds, _DiffNano) ->
+  {error, no_be_tree_to_search};
+piped_betree_search_with_cached_ids([Betree] = _Context, Event, CachedIds, DiffNano) ->
+  BeginNano = erlang:monotonic_time(nanosecond),
+  case erl_betree:search_with_cached_ids(Betree, Event, CachedIds) of
+    {ok, Ids} ->
+      EndNano = erlang:monotonic_time(nanosecond),
+      DiffNano1 = EndNano - BeginNano,
+      {ok, {Ids, DiffNano + DiffNano1}};
+    X -> {error, {search_with_cached_ids, X}}
+  end;
+piped_betree_search_with_cached_ids([Betree | Rest] = _Context, Event, CachedIds, DiffNano) ->
+  BeginNano = erlang:monotonic_time(nanosecond),
+  case erl_betree:search_with_cached_ids(Betree, Event, CachedIds) of
+    {ok, _Ids} ->
+      EndNano = erlang:monotonic_time(nanosecond),
+      DiffNano1 = EndNano - BeginNano,
+      piped_betree_search_with_cached_ids(Rest, Event, CachedIds, DiffNano + DiffNano1);
+    X -> {error, {search_with_cached_ids, X}}
+  end.
+
+%% 'Piped with cached ids' boolean expressions evaluation section. End
 
 stats_collector({DiffNano, Allocations}, #be_evaluator_stats{
   info = Info,

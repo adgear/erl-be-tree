@@ -18,7 +18,10 @@
     search_iterator/2,
     search_next/1,
     search_all/1,
-    search_iterator_release/1
+    search_iterator_release/1,
+
+    search_and_cache_ids/2,
+    search_with_cached_ids/3
 ]).
 
 -spec on_load() -> ok.
@@ -73,4 +76,9 @@ search_next(_Iterator) ->
 search_all(_Iterator) ->
     ?nif_stub.
 search_iterator_release(_Iterator) ->
+    ?nif_stub.
+
+search_and_cache_ids(_Betree, _Event) ->
+    ?nif_stub.
+search_with_cached_ids(_Betree, _Event, _Ids) ->
     ?nif_stub.

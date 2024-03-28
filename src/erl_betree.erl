@@ -15,7 +15,10 @@
     search_iterator/2,
     search_next/1,
     search_all/1,
-    search_iterator_release/1
+    search_iterator_release/1,
+
+    search_and_cache_ids/2,
+    search_with_cached_ids/3
 ]).
 
 -inline([check_clock_type/1]).
@@ -79,3 +82,9 @@ search_all(Iterator) ->
     erl_betree_nif:search_all(Iterator).
 search_iterator_release(Iterator) ->
     erl_betree_nif:search_iterator_release(Iterator).
+
+search_and_cache_ids(Betree, Event) ->
+    erl_betree_nif:search_and_cache_ids(Betree, Event).
+
+search_with_cached_ids(Betree, Event, Ids) ->
+    erl_betree_nif:search_with_cached_ids(Betree, Event, Ids).

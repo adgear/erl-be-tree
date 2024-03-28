@@ -54,6 +54,7 @@ static ErlNifResourceType* MEM_BETREE;
 static ErlNifResourceType* MEM_SUB;
 static ErlNifResourceType* MEM_EVENT;
 static ErlNifResourceType* MEM_SEARCH_ITERATOR;
+static ErlNifResourceType* MEM_IDS;
 
 struct sub {
     const struct betree_sub* sub;
@@ -140,6 +141,25 @@ static void search_iterator_deinit(struct search_iterator* search_iterator)
     search_iterator->node_count = 0;
 }
 
+struct ids_resource {
+    size_t count;
+    uint64_t* ids;
+};
+
+static void ids_resource_init(struct ids_resource* ids_resource)
+{
+    ids_resource->count = 0;
+    ids_resource->ids = NULL;
+}
+
+static void ids_resource_deinit(struct ids_resource* ids_resource)
+{
+    if (ids_resource->ids != NULL) {
+        bfree(ids_resource->ids);
+    }
+    ids_resource->count = 0;
+}
+
 static ERL_NIF_TERM make_atom(ErlNifEnv* env, const char* name)
 {
     ERL_NIF_TERM ret;
@@ -171,6 +191,13 @@ static void cleanup_search_iterator(ErlNifEnv* env, void* obj)
     (void)env;
     struct search_iterator* search_iterator = obj;
     search_iterator_deinit(search_iterator);
+}
+
+static void cleanup_ids_resource(ErlNifEnv* env, void* obj)
+{
+    (void)env;
+    struct ids_resource* ids_resource = obj;
+    ids_resource_deinit(ids_resource);
 }
 
 static int load(ErlNifEnv* env, void **priv_data, ERL_NIF_TERM load_info)
@@ -227,6 +254,10 @@ static int load(ErlNifEnv* env, void **priv_data, ERL_NIF_TERM load_info)
     if(MEM_SEARCH_ITERATOR == NULL) {
         return -1;
     }
+    MEM_IDS = enif_open_resource_type(env, NULL, "ids_resource", cleanup_ids_resource, flags, NULL);
+    if(MEM_IDS == NULL) {
+        return -1;
+    }
 
     return 0;
 }
@@ -243,6 +274,13 @@ static struct evt* get_evt(ErlNifEnv* env, const ERL_NIF_TERM term)
     struct evt* evt = NULL;
     enif_get_resource(env, term, MEM_EVENT, (void*)&evt);
     return evt;
+}
+
+static struct ids_resource* get_ids_resource(ErlNifEnv* env, const ERL_NIF_TERM term)
+{
+    struct ids_resource* ids_resource = NULL;
+    enif_get_resource(env, term, MEM_IDS, (void*)&ids_resource);
+    return ids_resource;
 }
 
 static struct search_iterator* get_search_iterator(ErlNifEnv* env, const ERL_NIF_TERM term)
@@ -1425,6 +1463,40 @@ static ERL_NIF_TERM ids_from_report(ErlNifEnv* env, const struct report* report)
     return res;
 }
 
+static ERL_NIF_TERM ids_from_report_and_cache_ids(ErlNifEnv* env, struct report* report,
+                                    struct ids_resource* ids_resource) {
+    ERL_NIF_TERM res = enif_make_list(env, 0);
+    ids_resource->count = report->matched;
+    if (ids_resource->count > 0) {
+        ids_resource->ids = report->subs;
+        report->subs = NULL;
+        qsort(ids_resource->ids, ids_resource->count, sizeof(uint64_t), cmpfunc);
+        for (size_t i = ids_resource->count; i;) {
+            i--;
+            res = enif_make_list_cell(env, enif_make_uint64(env, ids_resource->ids[i]), res);
+        }
+    }
+    return res;
+}
+
+static ERL_NIF_TERM ids_from_report_and_update_cached_ids(ErlNifEnv* env, struct report* report,
+                                                  struct ids_resource* ids_resource) {
+    ERL_NIF_TERM res = enif_make_list(env, 0);
+    ids_resource->count = report->matched;
+    bfree(ids_resource->ids);
+    ids_resource->ids = NULL;
+    if (ids_resource->count > 0) {
+        ids_resource->ids = report->subs;
+        report->subs = NULL;
+        qsort(ids_resource->ids, ids_resource->count, sizeof(uint64_t), cmpfunc);
+        for (size_t i = ids_resource->count; i;) {
+            i--;
+            res = enif_make_list_cell(env, enif_make_uint64(env, ids_resource->ids[i]), res);
+        }
+    }
+    return res;
+}
+
 static void bump_used_reductions(ErlNifEnv* env, int count)
 {
     const int reduction_per_count = 1;
@@ -1655,6 +1727,170 @@ static ERL_NIF_TERM nif_betree_search_iterator_release(ErlNifEnv* env, int argc,
     return atom_ok;
 }
 
+static ERL_NIF_TERM nif_search_and_cache_ids(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    ERL_NIF_TERM retval;
+    struct report* report = NULL;
+    size_t pred_index = 0;
+    struct betree_event* event = NULL;
+
+    if(argc != 2) {
+        retval = enif_make_badarg(env);
+        goto cleanup;
+    }
+
+    struct betree* betree = get_betree(env, argv[0]);
+    if(betree == NULL) {
+        retval = enif_make_badarg(env);
+        goto cleanup;
+    }
+
+    unsigned int list_len;
+    if(!enif_get_list_length(env, argv[1], &list_len)) {
+        retval = enif_make_badarg(env);
+        goto cleanup;
+    }
+
+    event = betree_make_event(betree);
+
+    ERL_NIF_TERM head;
+    ERL_NIF_TERM tail = argv[1];
+
+    const ERL_NIF_TERM* tuple;
+    int tuple_len;
+
+    for(unsigned int i = 0; i < list_len; i++) {
+        if(!enif_get_list_cell(env, tail, &head, &tail)) {
+            retval = enif_make_badarg(env);
+            goto cleanup;
+        }
+
+        if(!enif_get_tuple(env, head, &tuple_len, &tuple)) {
+            retval = enif_make_badarg(env);
+            goto cleanup;
+        }
+
+        if(!add_variables(env, betree, event, tuple, tuple_len, pred_index)) {
+            retval = enif_make_badarg(env);
+            goto cleanup;
+        }
+        pred_index += (tuple_len - 1);
+    }
+
+    report = make_report();
+    bool result = betree_search_with_event(betree, event, report);
+
+    if(result == false) {
+        retval = enif_make_badarg(env);
+        goto cleanup;
+    }
+
+    struct ids_resource* ids_resource = enif_alloc_resource(MEM_IDS, sizeof(*ids_resource));
+    ids_resource_init(ids_resource);
+
+    ERL_NIF_TERM ids_resource_term = enif_make_resource(env, ids_resource);
+    enif_release_resource(ids_resource);
+
+    ERL_NIF_TERM res = ids_from_report_and_cache_ids(env, report, ids_resource);
+
+    retval = enif_make_tuple3(env, atom_ok, res, ids_resource_term);
+    cleanup:
+    if(event != NULL) {
+        betree_free_event(event);
+    }
+    if(report != NULL) {
+//        free_report(report);
+        bfree(report);
+    }
+    return retval;
+}
+
+static ERL_NIF_TERM nif_search_with_cached_ids(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    ERL_NIF_TERM retval;
+    struct report* report = NULL;
+    size_t pred_index = 0;
+    struct betree_event* event = NULL;
+
+    if(argc != 3) {
+        retval = enif_make_badarg(env);
+        goto cleanup;
+    }
+
+    struct ids_resource* ids_resource = get_ids_resource(env, argv[2]);
+    if(ids_resource == NULL) {
+        retval = enif_make_badarg(env);
+        goto cleanup;
+    }
+
+    if (ids_resource->count == 0) {
+        ERL_NIF_TERM tmp[1];
+        ERL_NIF_TERM res = enif_make_list_from_array(env, tmp, 0);
+        retval = enif_make_tuple2(env, atom_ok, res);
+        goto cleanup;
+    }
+
+    struct betree* betree = get_betree(env, argv[0]);
+    if(betree == NULL) {
+        retval = enif_make_badarg(env);
+        goto cleanup;
+    }
+
+    unsigned int list_len;
+    if(!enif_get_list_length(env, argv[1], &list_len)) {
+        retval = enif_make_badarg(env);
+        goto cleanup;
+    }
+
+    event = betree_make_event(betree);
+
+    ERL_NIF_TERM head;
+    ERL_NIF_TERM tail = argv[1];
+
+    const ERL_NIF_TERM* tuple;
+    int tuple_len;
+
+    for(unsigned int i = 0; i < list_len; i++) {
+        if(!enif_get_list_cell(env, tail, &head, &tail)) {
+            retval = enif_make_badarg(env);
+            goto cleanup;
+        }
+
+        if(!enif_get_tuple(env, head, &tuple_len, &tuple)) {
+            retval = enif_make_badarg(env);
+            goto cleanup;
+        }
+
+        if(!add_variables(env, betree, event, tuple, tuple_len, pred_index)) {
+            retval = enif_make_badarg(env);
+            goto cleanup;
+        }
+        pred_index += (tuple_len - 1);
+    }
+
+    report = make_report();
+    bool result = betree_search_with_event_ids(betree, event, report,
+                                               ids_resource->ids, ids_resource->count);
+
+    if(result == false) {
+        retval = enif_make_badarg(env);
+        goto cleanup;
+    }
+
+    ERL_NIF_TERM res = ids_from_report_and_update_cached_ids(env, report, ids_resource);
+
+    retval = enif_make_tuple2(env, atom_ok, res);
+    cleanup:
+    if(event != NULL) {
+        betree_free_event(event);
+    }
+    if(report != NULL) {
+//        free_report(report);
+        bfree(report);
+    }
+    return retval;
+}
+
 /*static ERL_NIF_TERM nif_betree_delete(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])*/
 /*{*/
     /*ERL_NIF_TERM retval;*/
@@ -1694,6 +1930,8 @@ static ErlNifFunc nif_functions[] = {
     {"search_next", 1, nif_betree_search_next, 0},
     {"search_all", 1, nif_betree_search_all, 0},
     {"search_iterator_release", 1, nif_betree_search_iterator_release, 0},
+    {"search_and_cache_ids", 2, nif_search_and_cache_ids, 0},
+    {"search_with_cached_ids", 3, nif_search_with_cached_ids, 0},
     /*{"betree_delete", 2, nif_betree_delete, 0}*/
 };
 
