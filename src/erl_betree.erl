@@ -18,22 +18,21 @@
     search_iterator_release/1
 ]).
 
--inline([check_clock_type/1]).
 
--define(CLOCK_REALTIME, 0). 
--define(CLOCK_MONOTONIC, 6). 
--define(CLOCK_PROCESS_CPUTIME_ID, 12). 
--define(CLOCK_THREAD_CPUTIME_ID, 16). 
+% -define(CLOCK_REALTIME, 0). 
+-define(CLOCK_MONOTONIC, 1). 
+% -define(CLOCK_PROCESS_CPUTIME_ID, 2). 
+% -define(CLOCK_THREAD_CPUTIME_ID, 3). 
 
 betree_make(Domains) ->
     erl_betree_nif:betree_make(Domains).
 betree_make_event(Betree, Event) ->
     betree_make_event(Betree, Event, ?CLOCK_MONOTONIC).
 
-betree_make_event({_, Betree}, Event, CLockType) ->
-    erl_betree_nif:betree_make_event(Betree, Event, check_clock_type(CLockType));
-betree_make_event(Betree, Event, CLockType) ->
-    erl_betree_nif:betree_make_event(Betree, Event, check_clock_type(CLockType)).
+betree_make_event({_, Betree}, Event, ClockType) when is_integer(ClockType) ->
+    erl_betree_nif:betree_make_event(Betree, Event, ClockType);
+betree_make_event(Betree, Event, ClockType) when is_integer(ClockType) ->
+    erl_betree_nif:betree_make_event(Betree, Event, ClockType).
 betree_make_sub(Betree, SubId, Constants, Expr) ->
     erl_betree_nif:betree_make_sub(Betree, SubId, Constants, Expr).
 betree_insert_sub(Betree, Sub) ->
@@ -45,10 +44,10 @@ betree_search(Betree, Event) ->
 
 % @doc Calculates time spend in NIF. 
 % Time value is in microseconds - the erlang:timestamp resolution.  
-betree_search(Betree, Event, CLockType) when is_list(Event) ->
-    erl_betree_nif:betree_search(Betree, Event, check_clock_type(CLockType));
-betree_search(Betree, Event, CLockType) when is_reference(Event) ->
-    erl_betree_nif:betree_search_evt(Betree, Event, check_clock_type(CLockType)).
+betree_search(Betree, Event, ClockType) when is_list(Event), is_integer(ClockType) ->
+    erl_betree_nif:betree_search(Betree, Event, ClockType);
+betree_search(Betree, Event, ClockType) when is_reference(Event), is_integer(ClockType) ->
+    erl_betree_nif:betree_search_evt(Betree, Event, ClockType).
 
 betree_write_dot(Betree, FileName) when is_list(FileName) ->
     erl_betree_nif:betree_write_dot(Betree, FileName).
@@ -61,15 +60,10 @@ betree_search_ids(Betree, Event, Ids) ->
 % Time value is in microseconds - the erlang:timestamp resolution.  
 betree_search_ids(_Betree, _Event, [], _CLockType)  ->
     {0, []};
-betree_search_ids(Betree, Event, Ids, CLockType) when is_list(Event) ->
-    erl_betree_nif:betree_search_ids(Betree, Event, Ids, check_clock_type(CLockType));
-betree_search_ids(Betree, Event, Ids, CLockType) when is_reference(Event) ->
-    erl_betree_nif:betree_search_evt(Betree, Event, Ids, check_clock_type(CLockType)).
-
-check_clock_type(?CLOCK_REALTIME) -> ?CLOCK_REALTIME;
-check_clock_type(?CLOCK_PROCESS_CPUTIME_ID) -> ?CLOCK_PROCESS_CPUTIME_ID;
-check_clock_type(?CLOCK_THREAD_CPUTIME_ID) -> ?CLOCK_THREAD_CPUTIME_ID;
-check_clock_type(_) -> ?CLOCK_MONOTONIC.
+betree_search_ids(Betree, Event, Ids, ClockType) when is_list(Event), is_integer(ClockType) ->
+    erl_betree_nif:betree_search_ids(Betree, Event, Ids, ClockType);
+betree_search_ids(Betree, Event, Ids, ClockType) when is_reference(Event), is_integer(ClockType) ->
+    erl_betree_nif:betree_search_evt(Betree, Event, Ids, ClockType).
 
 search_iterator(Betree, Event) ->
     erl_betree_nif:search_iterator(Betree, Event).
