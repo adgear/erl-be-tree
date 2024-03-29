@@ -33,3 +33,22 @@
   snapshot_nano_acc,
   nano_diffs
 }).
+
+-record(forest_config, {
+  param_prefix,
+  n_params,
+  n_trees,
+  file_name
+}).
+
+-record(be_tree_config, {
+  params,
+  consts, % for future
+  exprs
+}).
+
+-record(events_config, {
+  n_params,
+  n_events,
+  file_name
+}).

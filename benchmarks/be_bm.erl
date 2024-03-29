@@ -711,26 +711,26 @@ read_combine_write(Op, PidReaders, PidWriter) ->
     {error, _Reason} = Err -> Err;
     {ok, []} -> read_combine_write(Op, PidReaders, PidWriter);
     {ok, [Expr | Rest]} ->
-      Combined = lists:foldl(fun (E, Bin) -> append_expression(Op, Bin, E) end,
+      Combined = lists:foldl(fun (E, Bin) -> be_bm_utils:append_expression(Op, Bin, E) end,
                     <<$(, Expr/binary, $)>>, Rest),
       term_writer:write(PidWriter, Combined),
       read_combine_write(Op, PidReaders, PidWriter)
   end.
-
-append_expression('and', Expr1, Expr2)
-  when is_binary(Expr1) andalso is_binary(Expr2) ->
-  <<Expr1/binary, " and ", $(, Expr2/binary, $)>>;
-append_expression('or', Expr1, Expr2)
-  when is_binary(Expr1) andalso is_binary(Expr2) ->
-  <<Expr1/binary, " or ", $(, Expr2/binary, $)>>;
-append_expression('and_not', Expr1, Expr2)
-  when is_binary(Expr1) andalso is_binary(Expr2) ->
-  <<Expr1/binary, " and not ", $(, Expr2/binary, $)>>;
-append_expression('or_not', Expr1, Expr2)
-  when is_binary(Expr1) andalso is_binary(Expr2) ->
-  <<Expr1/binary, " or not ", $(, Expr2/binary, $)>>;
-append_expression(Op, Expr1, Expr2) ->
-  {error, {wrong_parameters, Op, Expr1, Expr2}}.
+%%
+%%append_expression('and', Expr1, Expr2)
+%%  when is_binary(Expr1) andalso is_binary(Expr2) ->
+%%  <<Expr1/binary, " and ", $(, Expr2/binary, $)>>;
+%%append_expression('or', Expr1, Expr2)
+%%  when is_binary(Expr1) andalso is_binary(Expr2) ->
+%%  <<Expr1/binary, " or ", $(, Expr2/binary, $)>>;
+%%append_expression('and_not', Expr1, Expr2)
+%%  when is_binary(Expr1) andalso is_binary(Expr2) ->
+%%  <<Expr1/binary, " and not ", $(, Expr2/binary, $)>>;
+%%append_expression('or_not', Expr1, Expr2)
+%%  when is_binary(Expr1) andalso is_binary(Expr2) ->
+%%  <<Expr1/binary, " or not ", $(, Expr2/binary, $)>>;
+%%append_expression(Op, Expr1, Expr2) ->
+%%  {error, {wrong_parameters, Op, Expr1, Expr2}}.
 
 collect_row_from_readers([], Exprs) ->
   {ok, lists:reverse(Exprs)};

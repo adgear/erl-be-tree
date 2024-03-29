@@ -1,4 +1,5 @@
 -module(be_tools).
+-include("be_eval.hrl").
 
 %% To use:
 %% 1. Run `rebar3 shell';
@@ -11,6 +12,11 @@
   read_expr_file/1,
   write_terms/2,
   random_trees/3,
+  create_random_exprs/3,
+  forest_configs_to_be_tree_configs/2,
+  combine_be_trees/1,
+  combine_be_tree_configs/1,
+  prepare_be_tree_configs/1,
   write_random_trees_to_file/4,
   write_forest_union_to_file/3,
   write_forest_union_to_file/4,
@@ -23,21 +29,10 @@
   random_bool_events/2,
   random_bool_event/1,
   random_bool/0,
-  sort_increasing/1
+  sort_increasing/1,
+  zip_many/2,
+  concatenate_and/1
 ]).
-
--record(forest_config, {
-  param_prefix,
-  n_params,
-  n_trees,
-  file_name
-}).
-
--record(events_config, {
-  n_params,
-  n_events,
-  file_name
-}).
 
 read_expr_file(File) ->
   {ok, Exprs} = file:consult(File),
@@ -50,6 +45,46 @@ write_terms(File, Ts) ->
 random_trees(Prefix, N_parameters, N_trees) ->
   [be:mk_random_tree(Prefix, N_parameters) || _ <- lists:seq(1, N_trees)].
 
+create_random_exprs([] = _Configs, _N_trees_in_forest, ForestsAsExprs) ->
+  lists:reverse(ForestsAsExprs);
+create_random_exprs([#forest_config{
+  param_prefix = Prefix, n_params = N_params} | Rest] = _Configs,
+    N_trees_in_forest, ForestsAsExprs) ->
+  Forest = be_tools:random_trees(Prefix, N_params, N_trees_in_forest),
+  Exprs = [be:pp(T) || T <- Forest],
+  create_random_exprs(Rest, N_trees_in_forest, [Exprs | ForestsAsExprs]).
+
+forest_configs_to_be_tree_configs(ForestConfigs, N_trees_in_forest) ->
+  ForestsAsExprs = be_tools:create_random_exprs(ForestConfigs, N_trees_in_forest, []),
+  [#be_tree_config{
+    params = [be:enum_prefix(Prefix, I) || I <- lists:seq(1, N_params)],
+    exprs = Exprs} ||
+    {#forest_config{param_prefix = Prefix, n_params = N_params}, Exprs}
+      <- lists:zip(ForestConfigs, ForestsAsExprs)].
+
+combine_be_trees(BetreeConfigs) ->
+  ListOfListsOfExprs = [Exprs || #be_tree_config{exprs = Exprs} <- BetreeConfigs],
+  Concatenated = be_tools:concatenate_and(ListOfListsOfExprs),
+  Concatenated.
+
+combine_be_tree_configs(BetreeConfigs) ->
+  CombinedBeTrees = combine_be_trees(BetreeConfigs),
+  {Params, Consts} = lists:unzip(
+    [{P, case C =:= undefined of true -> []; _ -> C end}
+      || #be_tree_config{params = P, consts = C} <- BetreeConfigs]),
+  #be_tree_config{
+    params = lists:flatten(Params),
+    consts = lists:flatten(Consts),
+    exprs = CombinedBeTrees
+  }.
+
+prepare_be_tree_configs(BetreeConfigs) ->
+  #be_tree_config{params = Params} = CombinedBetreeConfig = combine_be_tree_configs(BetreeConfigs),
+  BetreeConfigsWithUpdatedParams = [
+    BtCfg#be_tree_config{params = Params, consts = case C =:= undefined of true -> []; _ -> C end}
+    || #be_tree_config{consts = C} = BtCfg <- BetreeConfigs],
+  {BetreeConfigsWithUpdatedParams, CombinedBetreeConfig}.
+
 %% Example:
 %%  create 5,000 boolean expressions
 %%  with 48 parameters "par1_1", "par1_2", ..., "par1_48"
@@ -59,7 +94,8 @@ write_random_trees_to_file(Prefix, N_parameters, N_trees, File) ->
   Trees = random_trees(Prefix, N_parameters, N_trees),
   Exprs = [be:pp(T) || T <- Trees],
   Params = [
-    {list_to_atom(Prefix ++ integer_to_list(I)), bool, disallow_undefined}
+%%    {list_to_atom(Prefix ++ integer_to_list(I)), bool, disallow_undefined}
+    {be:enum_prefix(Prefix, I), bool, disallow_undefined}
     || I <- lists:seq(1, N_parameters)],
   be_tools:write_terms(File, [Params | Exprs]).
 
@@ -227,3 +263,55 @@ sort_increasing(Exprs) ->
   lists:reverse(
     lists:sort(
       [{size(E), E} || E <- Exprs])).
+
+%%          L1   L2 ...  LN ->  L
+%% Combine(L1_1 L2_1 ... LN_1) -> L_1
+%% Combine(L1_2 L2_2 ... LN_2) -> L_2
+%% ...
+%% Combine(L1_M L2_M ... LN_M) -> L_M
+zip_many(_Combine, []) ->
+  [];
+zip_many(_Combine, [[]]) ->
+  [[]];
+zip_many(Combine, ListOfLists) ->
+  zip_many_acc(Combine,
+    ListOfLists, _ListOfListsAcc = [],
+    _RowAcc = [], _ResultListAcc = []).
+
+zip_many_acc(_Combine,
+    [[] | _RestOfListOfLists], % i.e. L1_(M+1), get out of recursion
+    _ListOfListsAcc,
+    _RowAcc, ResultListAcc = []) ->
+  [ResultListAcc];
+zip_many_acc(_Combine,
+    [[] | _RestOfListOfLists], % i.e. L1_(M+1), get out of recursion
+    _ListOfListsAcc,
+    _RowAcc, ResultListAcc) ->
+  lists:reverse(ResultListAcc);
+zip_many_acc(Combine,
+    _RestOfListOfLists = [], ListOfListsAcc,
+    RowAcc, ResultListAcc) ->
+  Combined = Combine(lists:reverse(RowAcc)),
+  zip_many_acc(Combine,
+    lists:reverse(ListOfListsAcc), _ListOfListsAcc = [],
+    _RowAcc = [], [Combined | ResultListAcc]);
+zip_many_acc(Combine,
+    [[Item | RestOfList] | RestOfListOfLists], ListOfListsAcc,
+    RowAcc, ResultListAcc) ->
+  zip_many_acc(Combine,
+    RestOfListOfLists, [RestOfList | ListOfListsAcc],
+    [Item | RowAcc], ResultListAcc).
+
+concatenate_and([]) ->
+  <<>>;
+concatenate_and(ListOfListOfBinary) ->
+  zip_many(fun and_binaries/1, ListOfListOfBinary).
+
+and_binaries([]) ->
+  <<>>;
+and_binaries([Bin]) ->
+  Bin;
+and_binaries([Bin | Rest]) ->
+  lists:foldl(fun (E, B) ->
+    be_bm_utils:append_expression('and', B, E) end,
+    <<$(, Bin/binary, $)>>, Rest).

@@ -104,7 +104,8 @@
   mk_atoms_map/2,
   union/3,
   union/4,
-  mk_random_tree/2
+  mk_random_tree/2,
+  enum_prefix/2
 ]).
 
 %% pretty print section
@@ -957,8 +958,12 @@ ast_not(Expr) ->
 
 mk_atoms_map(Prefix, N) ->
   maps:from_list(
-    [{I, list_to_atom(Prefix ++ integer_to_list(I))}
+%%    [{I, list_to_atom(Prefix ++ integer_to_list(I))}
+    [{I, enum_prefix(Prefix, I)}
       || I <- lists:seq(1, N)]).
+
+enum_prefix(Prefix, N) ->
+  list_to_atom(Prefix ++ integer_to_list(N)).
 
 union('and', N_Lhs, N_Rhs, Map) ->
   #{N_Lhs := Lhs, N_Rhs := Rhs} = Map,

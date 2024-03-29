@@ -16,7 +16,9 @@
 
   diff_tuple/2,
 
-  write_terms/2
+  write_terms/2,
+
+  append_expression/3
 ]).
 
 %% Consider a sorted list of numbers where
@@ -100,3 +102,18 @@ write_terms(undefined, _Ts) ->
 write_terms(File, Ts) ->
   Lines = [io_lib:format("~tp.~n", [T]) || T <- Ts],
   file:write_file(File, Lines).
+
+append_expression('and', Expr1, Expr2)
+  when is_binary(Expr1) andalso is_binary(Expr2) ->
+  <<Expr1/binary, " and ", $(, Expr2/binary, $)>>;
+append_expression('or', Expr1, Expr2)
+  when is_binary(Expr1) andalso is_binary(Expr2) ->
+  <<Expr1/binary, " or ", $(, Expr2/binary, $)>>;
+append_expression('and_not', Expr1, Expr2)
+  when is_binary(Expr1) andalso is_binary(Expr2) ->
+  <<Expr1/binary, " and not ", $(, Expr2/binary, $)>>;
+append_expression('or_not', Expr1, Expr2)
+  when is_binary(Expr1) andalso is_binary(Expr2) ->
+  <<Expr1/binary, " or not ", $(, Expr2/binary, $)>>;
+append_expression(Op, Expr1, Expr2) ->
+  {error, {wrong_parameters, Op, Expr1, Expr2}}.
