@@ -18,7 +18,8 @@
   prepare_be_tree_tester/0,
   run_event_tester/0,
   run_event_2_parameters/0,
-  run_events/2,
+  run_events_until_error/3,
+  run_events/3,
   run_event/2,
   run_event/4
 ]).
@@ -190,17 +191,38 @@ report_discrepancy({Event, Ids, IdsFromPipe},
   io:format("Report:~n~p~n~p~n", [Ids, Ids3]),
   be_tools:write_terms(ReportFile, Report).
 
-run_events(N_pipe_step_params, N_trees) ->
+run_events_until_error(0, _N_pipe_step_params, _N_trees) ->
+  ok;
+run_events_until_error(N_runs, N_pipe_step_params, N_trees) ->
+  OutputFlag = case N_runs rem 100 of
+                 0 ->
+                   io:format("Runs left: ~p~n", [N_runs]),
+                   true;
+                 _ -> false
+               end,
+  case run_events(N_pipe_step_params, N_trees, OutputFlag) of
+    error ->
+      {error, {runs_left, N_runs}};
+    ok ->
+      run_events_until_error(N_runs-1, N_pipe_step_params, N_trees)
+  end.
+
+run_events(N_pipe_step_params, N_trees, OutputFlag) ->
   {{N_params, [_Cfg1, _Cfg2, _Cfg3], _CfgCombined} = Cfgs,
     {[Betree1, Betree2, Betree3], BetreeCombined} = _Betrees}
     = be_tools:prepare_be_trees(N_pipe_step_params, N_trees),
   AllEvents = be_tools:all_bool_events(N_params),
-  io:format("Number of events: ~p~n", [length(AllEvents)]),
+  case OutputFlag of
+    true ->
+      io:format("Number of events: ~p~n", [length(AllEvents)]);
+    _ -> ok
+  end,
   case run_events(Betree1, Betree2, Betree3, BetreeCombined, AllEvents) of
     ok -> ok;
     {error, {_Event, _Ids, _IdsFromPipe} = EventIds} ->
-      report_discrepancy(EventIds, Cfgs, "benchmarks/discrepancy_report.txt")
-  end,
+      report_discrepancy(EventIds, Cfgs, "benchmarks/discrepancy_report.txt"),
+      error
+  end.
 %%  lists:foreach(fun (Event) ->
 %%    E = [list_to_tuple([bool_event | Event])],
 %%
@@ -221,7 +243,6 @@ run_events(N_pipe_step_params, N_trees) ->
 %%        false
 %%    end
 %%  end, AllEvents),
-  ok.
 
 run_events(_Betree1, _Betree2, _Betree3, _BetreeCombined, []) ->
   ok;
