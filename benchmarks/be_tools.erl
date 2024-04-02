@@ -17,6 +17,7 @@
   combine_be_trees/1,
   combine_be_tree_configs/1,
   prepare_be_tree_configs/1,
+  prepare_be_trees/2,
   write_random_trees_to_file/4,
   write_forest_union_to_file/3,
   write_forest_union_to_file/4,
@@ -29,6 +30,7 @@
   random_bool_events/2,
   random_bool_event/1,
   random_bool/0,
+  all_bool_events/1,
   sort_increasing/1,
   zip_many/2,
   concatenate_and/1
@@ -80,10 +82,36 @@ combine_be_tree_configs(BetreeConfigs) ->
 
 prepare_be_tree_configs(BetreeConfigs) ->
   #be_tree_config{params = Params} = CombinedBetreeConfig = combine_be_tree_configs(BetreeConfigs),
+  N_params = length(Params),
+  Typed = [{P, bool, disallow_undefined} || P <- Params],
+  CombinedBetreeConfigTyped = CombinedBetreeConfig#be_tree_config{params = Typed},
   BetreeConfigsWithUpdatedParams = [
-    BtCfg#be_tree_config{params = Params, consts = case C =:= undefined of true -> []; _ -> C end}
+    BtCfg#be_tree_config{params = Typed, consts = case C =:= undefined of true -> []; _ -> C end}
     || #be_tree_config{consts = C} = BtCfg <- BetreeConfigs],
-  {BetreeConfigsWithUpdatedParams, CombinedBetreeConfig}.
+  {N_params, BetreeConfigsWithUpdatedParams, CombinedBetreeConfigTyped}.
+
+prepare_be_trees(NumberOfTreeParameters, NumberOfTreesInForest) ->
+  Cfg1 = #forest_config{param_prefix = "p1_", n_params = NumberOfTreeParameters},
+  Cfg2 = #forest_config{param_prefix = "p2_", n_params = NumberOfTreeParameters},
+  Cfg3 = #forest_config{param_prefix = "p3_", n_params = NumberOfTreeParameters},
+  BtCfgs = be_tools:forest_configs_to_be_tree_configs([Cfg1, Cfg2, Cfg3], NumberOfTreesInForest),
+  Cfgs = {_N_params, [BetreeCfg1, BetreeCfg2, BetreeCfg3], CombinedBetreeConfig} =
+    be_tools:prepare_be_tree_configs(BtCfgs),
+
+  Betree1 = mk_be_tree(BetreeCfg1),
+  Betree2 = mk_be_tree(BetreeCfg2),
+  Betree3 = mk_be_tree(BetreeCfg3),
+  CombinedBetree = mk_be_tree(CombinedBetreeConfig),
+  Betrees = {[Betree1, Betree2, Betree3], CombinedBetree},
+  {Cfgs, Betrees}.
+
+mk_be_tree(#be_tree_config{params = P, consts = C, exprs = Exprs}) ->
+  {ok, Betree} = erl_betree:betree_make([P]),
+  lists:foreach(fun ({I, E}) ->
+    {ok, Sub} = erl_betree:betree_make_sub(Betree, I, C, E),
+    ok = erl_betree:betree_insert_sub(Betree, Sub)
+                end, lists:enumerate(Exprs)),
+  Betree.
 
 %% Example:
 %%  create 5,000 boolean expressions
@@ -258,6 +286,20 @@ random_bool() ->
     1 -> true;
     _ -> false
   end.
+
+all_bool_events(0) ->
+  [];
+all_bool_events(1) ->
+  [[true], [false]];
+all_bool_events(N_parameters) ->
+  all_bool_events_acc(N_parameters -1, [[true], [false]]).
+
+all_bool_events_acc(0, Acc) ->
+  Acc;
+all_bool_events_acc(N_parameters, Acc) ->
+  AccT = [[true | X] || X <- Acc],
+  AccF = [[false | X] || X <- Acc],
+  all_bool_events_acc(N_parameters-1, lists:append([AccT, AccF])).
 
 sort_increasing(Exprs) ->
   lists:reverse(
