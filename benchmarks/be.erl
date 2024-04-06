@@ -84,6 +84,10 @@
 -type ast() :: expr().
 
 -export([
+  % eval
+  eval/2,
+  eval_ast/2,
+
   % pretty_print
   pp/1,
   pp/2,
@@ -107,6 +111,105 @@
   mk_random_tree/2,
   enum_prefix/2
 ]).
+
+%% eval section
+eval(Expr, Bs) when is_list(Expr) andalso is_map(Bs) ->
+  eval(list_to_binary(Expr), Bs);
+eval(Expr, Bs) when is_binary(Expr) andalso is_map(Bs) ->
+  case beval:parse(Expr) of
+    {ok, Ast} -> eval(Ast, Bs);
+    Err -> Err
+  end;
+eval(Ast, Bs) when is_reference(Ast) andalso is_map(Bs) ->
+  case beval:ast(Ast) of
+    {ok, AstTerm} -> eval_ast(AstTerm, Bs);
+    Err -> Err
+  end.
+
+eval_ast(true, _Bs) ->
+  true;
+eval_ast(false, _Bs) ->
+  false;
+
+eval_ast({bool, Atom}, _Bs) ->
+  Atom;
+eval_ast({bool_lit, Atom}, _Bs) ->
+  Atom;
+eval_ast({bool_var, Atom} = Ast, Bs) when is_map(Bs) ->
+  case maps:get(Atom, Bs, no_param) of
+    no_param -> Ast;
+    Value -> Value
+  end;
+eval_ast({var, Atom} = Ast, Bs) when is_map(Bs) ->
+  case maps:get(Atom, Bs, no_param) of
+    no_param -> Ast;
+    Value -> Value
+  end;
+
+eval_ast({'not', true}, _Bs) ->
+  false;
+eval_ast({'not', false}, _Bs) ->
+  true;
+eval_ast({'not', Ast}, Bs) ->
+  case eval_ast(Ast, Bs) of
+    true -> false;
+    false -> true;
+    A -> {'not', A}
+  end;
+
+eval_ast({'and', false, _Rhs}, _Bs) ->
+  false;
+eval_ast({'and', _Lhs, false}, _Bs) ->
+  false;
+eval_ast({'and', Lhs, Rhs}, Bs) ->
+  case eval_ast(Lhs, Bs) of
+    false -> false;
+    true ->
+      case eval_ast(Rhs, Bs) of
+        false -> false;
+        true -> true;
+        R ->
+          {'and', true, R}
+      end;
+    L ->
+      case eval_ast(Rhs, Bs) of
+        false -> false;
+        true ->
+          {'and', L, true};
+        R ->
+          {'and', L, R}
+      end
+  end;
+
+eval_ast({'or', true, _Rhs}, _Bs) ->
+  true;
+eval_ast({'or', _Lhs, true}, _Bs) ->
+  true;
+eval_ast({'or', Lhs, Rhs}, Bs) ->
+  case eval_ast(Lhs, Bs) of
+    true -> true;
+    false ->
+      case eval_ast(Rhs, Bs) of
+        true -> true;
+        false -> false;
+        R ->
+          {'or', false, R}
+      end;
+    L ->
+      case eval_ast(Rhs, Bs) of
+        true -> true;
+        false ->
+          {'or', L, false};
+        R ->
+          {'or', L, R}
+      end
+  end;
+
+eval_ast(AstTerm, _Bs) when is_tuple(AstTerm) ->
+  AstTerm.
+
+%% eval section. End
+
 
 %% pretty print section
 pp({bool, true}) ->
