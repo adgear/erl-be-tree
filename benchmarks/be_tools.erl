@@ -105,6 +105,14 @@ prepare_be_trees(NumberOfTreeParameters, NumberOfTreesInForest) ->
   Betrees = {[Betree1, Betree2, Betree3], CombinedBetree},
   {Cfgs, Betrees}.
 
+%%prepare_expressions(NumberOfTreeParameters, NumberOfTreesInForest) ->
+%%  Cfg = #forest_config{param_prefix = "p", n_params = NumberOfTreeParameters},
+%%  BtCfgs = be_tools:forest_configs_to_be_tree_configs([Cfg], NumberOfTreesInForest),
+%%  {N_params, [_BetreeCfg], #be_tree_config{} = CombinedBetreeConfig} =
+%%    be_tools:prepare_be_tree_configs(BtCfgs),
+%%  CombinedBetree = mk_be_tree(CombinedBetreeConfig),
+%%  {N_params, CombinedBetreeConfig, CombinedBetree}.
+
 mk_be_tree(#be_tree_config{params = P, consts = C, exprs = Exprs}) ->
   {ok, Betree} = erl_betree:betree_make([P]),
   lists:foreach(fun ({I, E}) ->
