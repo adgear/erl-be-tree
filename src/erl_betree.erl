@@ -1,4 +1,5 @@
 -module(erl_betree).
+-include("erl_betree.hrl").
 
 -export([
     betree_make/1,
@@ -20,18 +21,13 @@
     search_iterator_release/1,
 
     % search with yield
-    betree_search_yield/3,
+    betree_search_yield/2,
     betree_search_yield/4,
     search_yield/3,
     search_yield/4,
     search_next_yield/3
 ]).
 
-
-% -define(CLOCK_REALTIME, 0). 
--define(CLOCK_MONOTONIC, 1). 
-% -define(CLOCK_PROCESS_CPUTIME_ID, 2). 
-% -define(CLOCK_THREAD_CPUTIME_ID, 3). 
 
 betree_make(Domains) ->
     erl_betree_nif:betree_make(Domains).
@@ -83,8 +79,8 @@ search_all(Iterator) ->
 search_iterator_release(Iterator) ->
     erl_betree_nif:search_iterator_release(Iterator).
 
-betree_search_yield(Betree, Event, ClockType) ->
-    betree_search_yield(Betree, Event, ClockType, 1_000).
+betree_search_yield(Betree, Event) ->
+    betree_search_yield(Betree, Event, ?CLOCK_MONOTONIC, ?THRESHOLD_1_000_MICROSECONDS).
 
 betree_search_yield(Betree, Event, ClockType, YieldThresholdInMicroseconds)
     when is_reference(Event),
@@ -106,7 +102,7 @@ betree_search_next_yield(SearchState, ClockType, YieldThresholdInMicroseconds) -
     end.
 
 search_yield(Betree, Event, ClockType) ->
-    search_yield(Betree, Event, ClockType, 1_000).
+    search_yield(Betree, Event, ClockType, ?THRESHOLD_1_000_MICROSECONDS).
 
 search_yield(Betree, Event, ClockType, YieldThresholdInMicroseconds)
     when is_reference(Event),

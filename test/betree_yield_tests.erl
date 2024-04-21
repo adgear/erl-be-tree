@@ -1,5 +1,5 @@
 -module(betree_yield_tests).
-
+-include("../src/erl_betree.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 default_threshold_test() ->
@@ -18,7 +18,7 @@ default_threshold_test() ->
   ?assertMatch({{ok, _}, _}, Ret_betree_make_event),
   {{ok, Evt}, _} = Ret_betree_make_event,
 
-  Ret_betree1_search = erl_betree:search_yield(Betree1, Evt, 0),
+  Ret_betree1_search = erl_betree:search_yield(Betree1, Evt, ?CLOCK_MONOTONIC),
   ?assertMatch({{ok, _}, _}, Ret_betree1_search),
   {{ok, Matched1}, _} = Ret_betree1_search,
   ?assertEqual([1], Matched1).
@@ -39,7 +39,7 @@ threshold_1_000_test() ->
   ?assertMatch({{ok, _}, _}, Ret_betree_make_event),
   {{ok, Evt}, _} = Ret_betree_make_event,
 
-  Ret_betree1_search = erl_betree:search_yield(Betree1, Evt, 0, 1_000),
+  Ret_betree1_search = erl_betree:search_yield(Betree1, Evt, ?CLOCK_MONOTONIC, ?THRESHOLD_1_000_MICROSECONDS),
   ?assertMatch({{ok, _}, _}, Ret_betree1_search),
   {{ok, Matched1}, _} = Ret_betree1_search,
   ?assertEqual([1], Matched1).
@@ -60,7 +60,7 @@ match_threshold_0_test() ->
   ?assertMatch({{ok, _}, _}, Ret_betree_make_event),
   {{ok, Evt}, _} = Ret_betree_make_event,
 
-  Ret_betree1_search = erl_betree:search_yield(Betree1, Evt, 0, 0),
+  Ret_betree1_search = erl_betree:search_yield(Betree1, Evt, ?CLOCK_MONOTONIC, ?THRESHOLD_0_MICROSECONDS),
   ?assertMatch({{continue, _}, _}, Ret_betree1_search),
   {{continue, SearchState}, _} = Ret_betree1_search,
   ?assert(is_reference(SearchState)).
@@ -78,7 +78,7 @@ no_sub_threshold_0_test() ->
   ?assertMatch({{ok, _}, _}, Ret_betree_make_event),
   {{ok, Evt}, _} = Ret_betree_make_event,
 
-  Ret_betree1_search = erl_betree:search_yield(Betree1, Evt, 0, 0),
+  Ret_betree1_search = erl_betree:search_yield(Betree1, Evt, ?CLOCK_MONOTONIC, ?THRESHOLD_0_MICROSECONDS),
   ?assertMatch({{ok, _}, _}, Ret_betree1_search),
   {{ok, Ids}, _} = Ret_betree1_search,
   ?assertEqual([], Ids).
@@ -102,7 +102,7 @@ two_exprs_threshold_1_000_test() ->
   ?assertMatch({{ok, _}, _}, Ret_betree_make_event),
   {{ok, Evt}, _} = Ret_betree_make_event,
 
-  Ret_betree1_search = erl_betree:search_yield(Betree1, Evt, 0, 1_000),
+  Ret_betree1_search = erl_betree:search_yield(Betree1, Evt, ?CLOCK_MONOTONIC, ?THRESHOLD_1_000_MICROSECONDS),
   ?assertMatch({{ok, _}, _}, Ret_betree1_search),
   {{ok, Ids}, _} = Ret_betree1_search,
   ?assertEqual([1, 2], lists:sort(Ids)).
@@ -126,16 +126,16 @@ two_exprs_threshold_0_test() ->
   ?assertMatch({{ok, _}, _}, Ret_betree_make_event),
   {{ok, Evt}, _} = Ret_betree_make_event,
 
-  Ret_betree1_search = erl_betree:search_yield(Betree1, Evt, 0, 0),
+  Ret_betree1_search = erl_betree:search_yield(Betree1, Evt, ?CLOCK_MONOTONIC, ?THRESHOLD_0_MICROSECONDS),
   ?assertMatch({{continue, _}, _}, Ret_betree1_search),
   {{continue, SearchState}, _} = Ret_betree1_search,
   ?assert(is_reference(SearchState)),
 
-  Ret_betree1_search_next1 = erl_betree:search_next_yield(SearchState, 0, 0),
+  Ret_betree1_search_next1 = erl_betree:search_next_yield(SearchState, ?CLOCK_MONOTONIC, ?THRESHOLD_0_MICROSECONDS),
   ?assertMatch({{continue, _}, _}, Ret_betree1_search_next1),
   {{continue, SearchState}, _} = Ret_betree1_search,
 
-  Ret_betree1_search_next2 = erl_betree:search_next_yield(SearchState, 0, 0),
+  Ret_betree1_search_next2 = erl_betree:search_next_yield(SearchState, ?CLOCK_MONOTONIC, ?THRESHOLD_0_MICROSECONDS),
   ?assertMatch({{ok, _}, _}, Ret_betree1_search_next2),
   {{ok, Ids}, _} = Ret_betree1_search_next2,
   ?assertEqual([1, 2], lists:sort(Ids)).
@@ -156,12 +156,12 @@ one_expr_no_match_threshold_0_test() ->
   ?assertMatch({{ok, _}, _}, Ret_betree_make_event),
   {{ok, Evt}, _} = Ret_betree_make_event,
 
-  Ret_betree1_search = erl_betree:search_yield(Betree1, Evt, 0, 0),
+  Ret_betree1_search = erl_betree:search_yield(Betree1, Evt, ?CLOCK_MONOTONIC, ?THRESHOLD_0_MICROSECONDS),
   ?assertMatch({{continue, _}, _}, Ret_betree1_search),
   {{continue, SearchState}, _} = Ret_betree1_search,
   ?assert(is_reference(SearchState)),
 
-  Ret_betree1_search_next1 = erl_betree:search_next_yield(SearchState, 0, 0),
+  Ret_betree1_search_next1 = erl_betree:search_next_yield(SearchState, ?CLOCK_MONOTONIC, ?THRESHOLD_0_MICROSECONDS),
   ?assertMatch({{ok, _}, _}, Ret_betree1_search_next1),
   {{ok, Ids}, _} = Ret_betree1_search_next1,
   ?assertEqual([], Ids).
@@ -195,24 +195,24 @@ four_expr_no_match_threshold_0_test() ->
   ?assertMatch({{ok, _}, _}, Ret_betree_make_event),
   {{ok, Evt}, _} = Ret_betree_make_event,
 
-  Ret_betree1_search = erl_betree:search_yield(Betree1, Evt, 0, 0),
+  Ret_betree1_search = erl_betree:search_yield(Betree1, Evt, ?CLOCK_MONOTONIC, ?THRESHOLD_0_MICROSECONDS),
   ?assertMatch({{continue, _}, _}, Ret_betree1_search),
   {{continue, SearchState}, _} = Ret_betree1_search,
   ?assert(is_reference(SearchState)),
 
-  Ret_betree1_search_next1 = erl_betree:search_next_yield(SearchState, 0, 0),
+  Ret_betree1_search_next1 = erl_betree:search_next_yield(SearchState, ?CLOCK_MONOTONIC, ?THRESHOLD_0_MICROSECONDS),
   ?assertMatch({{continue, _}, _}, Ret_betree1_search_next1),
   {{continue, SearchState}, _} = Ret_betree1_search_next1,
 
-  Ret_betree1_search_next2 = erl_betree:search_next_yield(SearchState, 0, 0),
+  Ret_betree1_search_next2 = erl_betree:search_next_yield(SearchState, ?CLOCK_MONOTONIC, ?THRESHOLD_0_MICROSECONDS),
   ?assertMatch({{continue, _}, _}, Ret_betree1_search_next2),
   {{continue, SearchState}, _} = Ret_betree1_search_next2,
 
-  Ret_betree1_search_next3 = erl_betree:search_next_yield(SearchState, 0, 0),
+  Ret_betree1_search_next3 = erl_betree:search_next_yield(SearchState, ?CLOCK_MONOTONIC, ?THRESHOLD_0_MICROSECONDS),
   ?assertMatch({{continue, _}, _}, Ret_betree1_search_next3),
   {{continue, SearchState}, _} = Ret_betree1_search_next3,
 
-  Ret_betree1_search_next4 = erl_betree:search_next_yield(SearchState, 0, 0),
+  Ret_betree1_search_next4 = erl_betree:search_next_yield(SearchState, ?CLOCK_MONOTONIC, ?THRESHOLD_0_MICROSECONDS),
   ?assertMatch({{ok, _}, _}, Ret_betree1_search_next4),
   {{ok, Ids}, _} = Ret_betree1_search_next4,
   ?assertEqual([], Ids).
@@ -233,7 +233,7 @@ wrapper_default_threshold_test() ->
   ?assertMatch({{ok, _}, _}, Ret_betree_make_event),
   {{ok, Evt}, _} = Ret_betree_make_event,
 
-  Ret_betree1_search = erl_betree:betree_search_yield(Betree1, Evt, 0),
+  Ret_betree1_search = erl_betree:betree_search_yield(Betree1, Evt),
   ?assertMatch({{ok, _}, _}, Ret_betree1_search),
   {{ok, Matched1}, _} = Ret_betree1_search,
   ?assertEqual([1], Matched1).
@@ -254,7 +254,7 @@ wrapper_threshold_1_000_test() ->
   ?assertMatch({{ok, _}, _}, Ret_betree_make_event),
   {{ok, Evt}, _} = Ret_betree_make_event,
 
-  Ret_betree1_search = erl_betree:betree_search_yield(Betree1, Evt, 0, 1_000),
+  Ret_betree1_search = erl_betree:betree_search_yield(Betree1, Evt, ?CLOCK_MONOTONIC, ?THRESHOLD_1_000_MICROSECONDS),
   ?assertMatch({{ok, _}, _}, Ret_betree1_search),
   {{ok, Matched1}, _} = Ret_betree1_search,
   ?assertEqual([1], Matched1).
@@ -272,7 +272,7 @@ wrapper_no_sub_threshold_0_test() ->
   ?assertMatch({{ok, _}, _}, Ret_betree_make_event),
   {{ok, Evt}, _} = Ret_betree_make_event,
 
-  Ret_betree1_search = erl_betree:betree_search_yield(Betree1, Evt, 0, 0),
+  Ret_betree1_search = erl_betree:betree_search_yield(Betree1, Evt, ?CLOCK_MONOTONIC, ?THRESHOLD_0_MICROSECONDS),
   ?assertMatch({{ok, _}, _}, Ret_betree1_search),
   {{ok, Ids}, _} = Ret_betree1_search,
   ?assertEqual([], Ids).
@@ -296,7 +296,7 @@ wrapper_two_exprs_threshold_1_000_test() ->
   ?assertMatch({{ok, _}, _}, Ret_betree_make_event),
   {{ok, Evt}, _} = Ret_betree_make_event,
 
-  Ret_betree1_search = erl_betree:betree_search_yield(Betree1, Evt, 0, 1_000),
+  Ret_betree1_search = erl_betree:betree_search_yield(Betree1, Evt, ?CLOCK_MONOTONIC, ?THRESHOLD_1_000_MICROSECONDS),
   ?assertMatch({{ok, _}, _}, Ret_betree1_search),
   {{ok, Ids}, _} = Ret_betree1_search,
   ?assertEqual([1, 2], lists:sort(Ids)).
@@ -320,7 +320,7 @@ wrapper_two_exprs_threshold_0_test() ->
   ?assertMatch({{ok, _}, _}, Ret_betree_make_event),
   {{ok, Evt}, _} = Ret_betree_make_event,
 
-  Ret_betree1_search = erl_betree:betree_search_yield(Betree1, Evt, 0, 0),
+  Ret_betree1_search = erl_betree:betree_search_yield(Betree1, Evt, ?CLOCK_MONOTONIC, ?THRESHOLD_0_MICROSECONDS),
   ?assertMatch({{ok, _}, _}, Ret_betree1_search),
   {{ok, Ids}, _} = Ret_betree1_search,
   ?assertEqual([1, 2], lists:sort(Ids)).
@@ -341,7 +341,7 @@ wrapper_one_expr_no_match_threshold_0_test() ->
   ?assertMatch({{ok, _}, _}, Ret_betree_make_event),
   {{ok, Evt}, _} = Ret_betree_make_event,
 
-  Ret_betree1_search = erl_betree:betree_search_yield(Betree1, Evt, 0, 0),
+  Ret_betree1_search = erl_betree:betree_search_yield(Betree1, Evt, ?CLOCK_MONOTONIC, ?THRESHOLD_0_MICROSECONDS),
   ?assertMatch({{ok, _}, _}, Ret_betree1_search),
   {{ok, Ids}, _} = Ret_betree1_search,
   ?assertEqual([], Ids).
@@ -375,7 +375,7 @@ wrapper_four_expr_no_match_threshold_0_test() ->
   ?assertMatch({{ok, _}, _}, Ret_betree_make_event),
   {{ok, Evt}, _} = Ret_betree_make_event,
 
-  Ret_betree1_search = erl_betree:betree_search_yield(Betree1, Evt, 0, 0),
+  Ret_betree1_search = erl_betree:betree_search_yield(Betree1, Evt, ?CLOCK_MONOTONIC, ?THRESHOLD_0_MICROSECONDS),
   ?assertMatch({{ok, _}, _}, Ret_betree1_search),
   {{ok, Ids}, _} = Ret_betree1_search,
   ?assertEqual([], Ids).
@@ -410,13 +410,13 @@ timing_test() ->
   {{ok, Evt}, ElapsedMakeEvent} = Ret_betree_make_event,
 %%  ?debugFmt("~nbetree_make_event: ~p~n", [ElapsedMakeEvent]),
 
-  Ret_betree1_search_yield = erl_betree:betree_search_yield(Betree1, Evt, 0, 0),
+  Ret_betree1_search_yield = erl_betree:betree_search_yield(Betree1, Evt, ?CLOCK_MONOTONIC, ?THRESHOLD_0_MICROSECONDS),
   ?assertMatch({{ok, _}, _}, Ret_betree1_search_yield),
   {{ok, IdsYield}, ElapsedSearchYield} = Ret_betree1_search_yield,
   ?assertEqual([1, 2, 3, 4], lists:sort(IdsYield)),
 %%  ?debugFmt("~nbetree_search_yield: ~p~n", [ElapsedSearchYield]),
 
-  Ret_betree1_search = erl_betree:betree_search(Betree1, Event, 0),
+  Ret_betree1_search = erl_betree:betree_search(Betree1, Event, ?CLOCK_MONOTONIC),
   ?assertMatch({{ok, _}, _}, Ret_betree1_search),
   {{ok, Ids}, Elapsed} = Ret_betree1_search_yield,
   ?assertEqual([1, 2, 3, 4], lists:sort(Ids)),
