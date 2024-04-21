@@ -1,4 +1,5 @@
 -module(erl_betree).
+-include("erl_betree.hrl").
 
 -export([
     betree_make/1,
@@ -12,17 +13,28 @@
     betree_search_ids/3,
     betree_search_ids/4,
     betree_write_dot/2,
+
+    % search with iterator
     search_iterator/2,
     search_next/1,
     search_all/1,
-    search_iterator_release/1
+    search_iterator_release/1,
+
+    % search with yield API
+    betree_search_yield/3,
+    betree_search_ids_yield/4,
+
+    % search with yield API, helper functions
+    betree_search_yield/2,
+    search_yield_count/2,
+    search_yield_count/5,
+    search_yield/3,
+    search_yield/4,
+    search_next_yield/3,
+    betree_search_ids_yield/3,
+    search_ids_yield/5
 ]).
 
-
-% -define(CLOCK_REALTIME, 0). 
--define(CLOCK_MONOTONIC, 1). 
-% -define(CLOCK_PROCESS_CPUTIME_ID, 2). 
-% -define(CLOCK_THREAD_CPUTIME_ID, 3). 
 
 betree_make(Domains) ->
     erl_betree_nif:betree_make(Domains).
@@ -73,3 +85,88 @@ search_all(Iterator) ->
     erl_betree_nif:search_all(Iterator).
 search_iterator_release(Iterator) ->
     erl_betree_nif:search_iterator_release(Iterator).
+
+betree_search_yield(Betree, Event) ->
+    {{ok, _Ids}, Elapsed, _Acc} = search_yield_count(Betree, Event),
+    {{ok, _Ids}, Elapsed}.
+
+% @doc Search expressions in Betree that match the Event.
+% The search is the subject to 1 millisecond threshold.
+% When the threshold is reached
+% the reduction count is adjusted and
+% the control is returned back to the Erlang Scheduler.
+% The Erlang Scheduler schedulers the search continuation.
+% The search continuation respects the 1 millisecond threshold and
+% the reduction count.
+% Parameters:
+% Betree - BE-Tree of expressions;
+% Event - compiled event, result of betree_make_event;
+% ClockType - one of the clock types: monotonic, etc;
+% Return: {{ok, Ids}, Elapsed}, where
+% Ids - list of matched expressions ids;
+% Elapsed - the search elapsed time, in microseconds.
+betree_search_yield(Betree, Event, ClockType) ->
+    {{ok, _Ids}, Elapsed, _Acc} = search_yield_count(Betree, Event, ClockType, ?THRESHOLD_1_000_MICROSECONDS, 0),
+    {{ok, _Ids}, Elapsed}.
+
+search_yield_count(Betree, Event) ->
+    search_yield_count(Betree, Event, ?CLOCK_MONOTONIC, ?THRESHOLD_1_000_MICROSECONDS, 0).
+
+search_yield_count(Betree, Event, ClockType, YieldThresholdInMicroseconds, Acc)
+    when is_reference(Event),
+    is_integer(ClockType),
+    is_integer(YieldThresholdInMicroseconds) ->
+    case search_yield(Betree, Event, ClockType, YieldThresholdInMicroseconds) of
+        {{ok, _Ids}, _Elapsed} ->
+            {{ok, _Ids}, _Elapsed, Acc+1};
+        {{continue, SearchState}, _} ->
+            search_next_yield_count(SearchState, ClockType, YieldThresholdInMicroseconds, Acc+1)
+    end.
+
+search_next_yield_count(SearchState, ClockType, YieldThresholdInMicroseconds, Acc) ->
+    case search_next_yield(SearchState, ClockType, YieldThresholdInMicroseconds) of
+        {{ok, _Ids}, _Elapsed} ->
+            {{ok, _Ids}, _Elapsed, Acc+1};
+        {{continue, SearchState}, _} ->
+            search_next_yield_count(SearchState, ClockType, YieldThresholdInMicroseconds, Acc+1)
+    end.
+
+search_yield(Betree, Event, ClockType) ->
+    search_yield(Betree, Event, ClockType, ?THRESHOLD_1_000_MICROSECONDS).
+
+search_yield(Betree, Event, ClockType, YieldThresholdInMicroseconds)
+    when is_reference(Event),
+    is_integer(ClockType),
+    is_integer(YieldThresholdInMicroseconds) ->
+    erl_betree_nif:search_yield(Betree, Event, ClockType, YieldThresholdInMicroseconds).
+
+search_next_yield(SearchState, ClockType, YieldThresholdInMicroseconds)
+    when is_reference(SearchState),
+    is_integer(ClockType),
+    is_integer(YieldThresholdInMicroseconds) ->
+    erl_betree_nif:search_next_yield(SearchState, ClockType, YieldThresholdInMicroseconds).
+
+betree_search_ids_yield(Betree, Event, Ids) ->
+    search_ids_yield(Betree, Event, Ids, ?CLOCK_MONOTONIC, ?THRESHOLD_1_000_MICROSECONDS).
+
+% @doc Search expressions in Betree that match the Event
+% and are a subset of Ids.
+% Before returning the result the reduction count is adjusted.
+% Parameters:
+% Betree - BE-Tree of expressions;
+% Event - compiled event, result of betree_make_event;
+% Ids - list of ids;
+% ClockType - one of the clock types: monotonic, etc;
+% Return: {{ok, SubsetIds}, Elapsed}, where
+% SubsetIds - list of matched expressions ids;
+% Elapsed - the search elapsed time, in microseconds.
+betree_search_ids_yield(Betree, Event, Ids, ClockType) ->
+    search_ids_yield(Betree, Event, Ids, ClockType, ?THRESHOLD_1_000_MICROSECONDS).
+
+search_ids_yield(_Betree, _Event, _Ids = [], _ClockType, _YieldThresholdInMicroseconds) ->
+    {{ok, []}, 0};
+search_ids_yield(Betree, Event, Ids = [_|_], ClockType, YieldThresholdInMicroseconds)
+    when is_reference(Event),
+    is_integer(ClockType),
+    is_integer(YieldThresholdInMicroseconds) ->
+    erl_betree_nif:search_ids_yield(Betree, Event, Ids, ClockType, YieldThresholdInMicroseconds).
