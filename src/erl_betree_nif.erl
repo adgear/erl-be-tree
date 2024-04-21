@@ -15,10 +15,16 @@
     betree_search_evt/4,
     betree_search_ids/4,
     betree_write_dot/2,
+
+    % search with iterator
     search_iterator/2,
     search_next/1,
     search_all/1,
-    search_iterator_release/1
+    search_iterator_release/1,
+
+    % search with yield
+    search_yield/4,
+    search_next_yield/3
 ]).
 
 -spec on_load() -> ok.
@@ -73,4 +79,9 @@ search_next(_Iterator) ->
 search_all(_Iterator) ->
     ?nif_stub.
 search_iterator_release(_Iterator) ->
+    ?nif_stub.
+
+search_yield(_Betree, _Event, _ClockType, _YieldThresholdInMicroseconds) ->
+    ?nif_stub.
+search_next_yield(_SearchState, _ClockType, _YieldThresholdInMicroseconds) ->
     ?nif_stub.

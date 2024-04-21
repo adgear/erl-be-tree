@@ -3,8 +3,8 @@
 set -x
 
 if [ ! -d "be-tree" ]; then
-    git clone -b 'v1.4.0' --single-branch --depth 1 http://github.com/adgear/be-tree
+#    git clone -b 'v1.4.0' --single-branch --depth 1 http://github.com/adgear/be-tree
+    git clone -b 'PEDSP-6269' --single-branch --depth 1 http://github.com/adgear/be-tree
     cd be-tree
     make NIF=true
 fi
-
