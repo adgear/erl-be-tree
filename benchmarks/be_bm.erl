@@ -140,6 +140,7 @@ with_yield_betree_search(Term, #be_evaluator{betree = Betree} = Context) ->
   {{ok, CompiledEvent}, _} = erl_betree:betree_make_event(Betree, Event),
   BeginNano = erlang:monotonic_time(nanosecond),
   SearchRet = erl_betree:betree_search_yield(Betree, CompiledEvent),
+  SearchRet = erl_betree:search_yield_count(Betree, CompiledEvent, ?CLOCK_MONOTONIC, ?THRESHOLD_1_000_MICROSECONDS, 0),
   EndNano = erlang:monotonic_time(nanosecond),
   CurrentAllocations = be_bm_utils:betree_allocations(),
   DiffNano = EndNano - BeginNano,
@@ -579,6 +580,51 @@ stats_collector({DiffNano, Allocations}, #be_evaluator_stats{
           index = Index1,
           current_allocations = Allocations,
           snapshot_nano_acc = SnapshotNanoAcc1}
+    end,
+  {ok, Stats1};
+
+stats_collector({DiffNano, Allocations, Iterations}, #be_evaluator_stats{
+  info = Info,
+  index = Index,
+  snapshot_freq = SnapshotFreq,
+  snapshot_allocations = SnapshotAllocations,
+  allocation_diffs = AllocationsDiffs,
+  snapshot_nano_acc = SnapshotNanoAcc,
+  nano_diffs = NanoDiffs,
+  snapshot_iterations_acc = SnapshotIterationsAcc,
+  iterations_acc = IterationsAcc
+} = Stats) ->
+  Index1 = Index + 1,
+  CurrentTime = calendar:universal_time_to_local_time(erlang:universaltime()),
+  SnapshotNanoAcc1 = SnapshotNanoAcc + DiffNano,
+  SnapshotIterationsAcc1 = SnapshotIterationsAcc + Iterations,
+  Stats1 =
+    case Index1 rem SnapshotFreq of
+      0 ->
+        NanoPerEvent = SnapshotNanoAcc1 / SnapshotFreq,
+        MicroPerEvent = NanoPerEvent / 1_000,
+        io:format(Info ++ ": ~p, ~p microseconds/event~n", [Index1, ceil(MicroPerEvent)]),
+        IterationsPerEvent = SnapshotIterationsAcc1 / SnapshotFreq,
+        io:format(Info ++ ": ~p, ~p iterations/event~n", [Index1, ceil(IterationsPerEvent)]),
+        AllocationDiff = be_bm_utils:betree_allocations_diff(SnapshotAllocations, Allocations),
+        io:format(Info ++ " allocations diff:~n~p~n", [AllocationDiff]),
+        Stats#be_evaluator_stats{
+          current_time = CurrentTime,
+          index = Index1,
+          current_allocations = Allocations,
+          snapshot_allocations = Allocations,
+          allocation_diffs = [AllocationDiff | AllocationsDiffs],
+          snapshot_nano_acc = 0,
+          nano_diffs = [SnapshotNanoAcc1 | NanoDiffs],
+          snapshot_iterations_acc = 0,
+          iterations_acc = [SnapshotIterationsAcc1 | IterationsAcc]};
+      _ ->
+        Stats#be_evaluator_stats{
+          current_time = CurrentTime,
+          index = Index1,
+          current_allocations = Allocations,
+          snapshot_nano_acc = SnapshotNanoAcc1,
+          snapshot_iterations_acc = SnapshotIterationsAcc1}
     end,
   {ok, Stats1}.
 

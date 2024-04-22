@@ -108,6 +108,8 @@ handle_call({run, Info, BetreeFile, EventsFile, EventEvalFunc, EventEvalOutputFi
               AllocationDiffs = [],
               SnapshotNanoAcc = 0,
               NanoDiffs = [],
+              SnapshotIterationsAcc = 0,
+              IterationsAcc = [],
               EvaluatorStats = #be_evaluator_stats{
                 start_time = StartTime,
                 info = Info,
@@ -118,7 +120,9 @@ handle_call({run, Info, BetreeFile, EventsFile, EventEvalFunc, EventEvalOutputFi
                 snapshot_allocations = Allocations,
                 allocation_diffs = AllocationDiffs,
                 snapshot_nano_acc = SnapshotNanoAcc,
-                nano_diffs = NanoDiffs},
+                nano_diffs = NanoDiffs,
+                snapshot_iterations_acc = SnapshotIterationsAcc,
+                iterations_acc = IterationsAcc},
 
               ok = term_eval:update_context(PidStats, StatsFunc, EvaluatorStats),
 
@@ -180,6 +184,8 @@ handle_call({pipe, Info, BetreeFiles, EventsFile, EventEvalFunc, EventEvalOutput
               AllocationDiffs = [],
               SnapshotNanoAcc = 0,
               NanoDiffs = [],
+              SnapshotIterationsAcc = 0,
+              IterationsAcc = [],
               EvaluatorStats = #be_evaluator_stats{
                 start_time = StartTime,
                 info = Info,
@@ -190,7 +196,9 @@ handle_call({pipe, Info, BetreeFiles, EventsFile, EventEvalFunc, EventEvalOutput
                 snapshot_allocations = Allocations,
                 allocation_diffs = AllocationDiffs,
                 snapshot_nano_acc = SnapshotNanoAcc,
-                nano_diffs = NanoDiffs},
+                nano_diffs = NanoDiffs,
+                snapshot_iterations_acc = SnapshotIterationsAcc,
+                iterations_acc = IterationsAcc},
 
               {ok, PidStats} = term_eval:start_link(StatsFunc, EvaluatorStats),
 
@@ -305,7 +313,8 @@ report_stats(#be_evaluator_stats{
   initial_allocations = InitialAllocations,
   current_allocations = CurrentAllocations,
   allocation_diffs = AllocationDifs,
-  nano_diffs = NanoDiffs
+  nano_diffs = NanoDiffs,
+  iterations_acc = IterationsAcc
 }) ->
   StartSec = calendar:datetime_to_gregorian_seconds(StartTime),
   CurrentSec = calendar:datetime_to_gregorian_seconds(CurrentTime),
@@ -318,6 +327,7 @@ report_stats(#be_evaluator_stats{
     {initial_allocations, InitialAllocations},
     {current_allocations, CurrentAllocations},
     {nano_diffs, lists:reverse(NanoDiffs)},
+    {iterations, lists:reverse(IterationsAcc)},
     {allocation_diffs, lists:reverse(AllocationDifs)}
   ];
 report_stats(X) ->

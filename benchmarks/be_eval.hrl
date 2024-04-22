@@ -31,7 +31,9 @@
   snapshot_allocations,
   allocation_diffs,
   snapshot_nano_acc,
-  nano_diffs
+  nano_diffs,
+  snapshot_iterations_acc,
+  iterations_acc
 }).
 
 -record(forest_config, {
