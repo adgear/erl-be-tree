@@ -22,6 +22,7 @@
 
     % search with yield
     betree_search_yield/2,
+    search_yield_count/2,
     search_yield_count/5,
     search_yield/3,
     search_yield/4,
@@ -83,8 +84,11 @@ search_iterator_release(Iterator) ->
     erl_betree_nif:search_iterator_release(Iterator).
 
 betree_search_yield(Betree, Event) ->
-    {{ok, _Ids}, _Elapsed, _Acc} = search_yield_count(Betree, Event, ?CLOCK_MONOTONIC, ?THRESHOLD_1_000_MICROSECONDS, 0),
+    {{ok, _Ids}, _Elapsed, _Acc} = search_yield_count(Betree, Event),
     {{ok, _Ids}, _Elapsed}.
+
+search_yield_count(Betree, Event) ->
+    search_yield_count(Betree, Event, ?CLOCK_MONOTONIC, ?THRESHOLD_1_000_MICROSECONDS, 0).
 
 search_yield_count(Betree, Event, ClockType, YieldThresholdInMicroseconds, Acc)
     when is_reference(Event),
