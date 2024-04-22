@@ -98,7 +98,7 @@ search_yield_count(Betree, Event, ClockType, YieldThresholdInMicroseconds, Acc)
         {{ok, _Ids}, _Elapsed} ->
             {{ok, _Ids}, _Elapsed, Acc+1};
         {{continue, SearchState}, _} ->
-            search_next_yield_count(SearchState, ClockType, YieldThresholdInMicroseconds, Acc)
+            search_next_yield_count(SearchState, ClockType, YieldThresholdInMicroseconds, Acc+1)
     end.
 
 search_next_yield_count(SearchState, ClockType, YieldThresholdInMicroseconds, Acc) ->

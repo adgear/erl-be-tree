@@ -457,7 +457,7 @@ iteration_counting_threshold_0_test() ->
   ?assertMatch({{ok, _}, _, _}, Ret_betree1_search_yield),
   {{ok, IdsYield}, _ElapsedSearchYield, IterationCount} = Ret_betree1_search_yield,
   ?assertEqual([1, 2, 3, 4], lists:sort(IdsYield)),
-  ?assertEqual(4, IterationCount).
+  ?assertEqual(5, IterationCount).
 
 iteration_counting_threshold_1_000_test() ->
   Domains = [[
@@ -493,3 +493,68 @@ iteration_counting_threshold_1_000_test() ->
   {{ok, IdsYield}, _ElapsedSearchYield, IterationCount} = Ret_betree1_search_yield,
   ?assertEqual([1, 2, 3, 4], lists:sort(IdsYield)),
   ?assertEqual(1, IterationCount).
+
+iteration_counting_no_sub_threshold_0_test() ->
+  Domains = [[
+    {par1,bool,disallow_undefined},
+    {par2,bool,disallow_undefined},
+    {par3,bool,disallow_undefined}
+  ]],
+  {ok, Betree1} = erl_betree:betree_make(Domains),
+
+  Event = [{bool_event, false, false, false}],
+  Ret_betree_make_event = erl_betree:betree_make_event(Betree1, Event),
+  ?assertMatch({{ok, _}, _}, Ret_betree_make_event),
+  {{ok, Evt}, _} = Ret_betree_make_event,
+
+  Ret_betree1_search = erl_betree:search_yield_count(Betree1, Evt),
+  ?assertMatch({{ok, _}, _, _}, Ret_betree1_search),
+  {{ok, Ids}, _, IterationCount} = Ret_betree1_search,
+  ?assertEqual([], Ids),
+  ?assertEqual(1, IterationCount).
+
+iteration_counting_one_sub_no_match_threshold_0_test() ->
+  Domains = [[
+    {par1,bool,disallow_undefined},
+    {par2,bool,disallow_undefined},
+    {par3,bool,disallow_undefined}
+  ]],
+  {ok, Betree1} = erl_betree:betree_make(Domains),
+
+  Expr1 = <<"par1">>,
+  {ok, Sub1} = erl_betree:betree_make_sub(Betree1, 1, [], Expr1),
+  ok = erl_betree:betree_insert_sub(Betree1, Sub1),
+
+  Event = [{bool_event, false, false, false}],
+  Ret_betree_make_event = erl_betree:betree_make_event(Betree1, Event),
+  ?assertMatch({{ok, _}, _}, Ret_betree_make_event),
+  {{ok, Evt}, _} = Ret_betree_make_event,
+
+  Ret_betree1_search = erl_betree:search_yield_count(Betree1, Evt, ?CLOCK_MONOTONIC, ?THRESHOLD_0_MICROSECONDS, 0),
+  ?assertMatch({{ok, _}, _, _}, Ret_betree1_search),
+  {{ok, Ids}, _, IterationCount} = Ret_betree1_search,
+  ?assertEqual([], Ids),
+  ?assertEqual(2, IterationCount).
+
+iteration_counting_one_sub_match_threshold_0_test() ->
+  Domains = [[
+    {par1,bool,disallow_undefined},
+    {par2,bool,disallow_undefined},
+    {par3,bool,disallow_undefined}
+  ]],
+  {ok, Betree1} = erl_betree:betree_make(Domains),
+
+  Expr1 = <<"par1">>,
+  {ok, Sub1} = erl_betree:betree_make_sub(Betree1, 1, [], Expr1),
+  ok = erl_betree:betree_insert_sub(Betree1, Sub1),
+
+  Event = [{bool_event, true, false, false}],
+  Ret_betree_make_event = erl_betree:betree_make_event(Betree1, Event),
+  ?assertMatch({{ok, _}, _}, Ret_betree_make_event),
+  {{ok, Evt}, _} = Ret_betree_make_event,
+
+  Ret_betree1_search = erl_betree:search_yield_count(Betree1, Evt, ?CLOCK_MONOTONIC, ?THRESHOLD_0_MICROSECONDS, 0),
+  ?assertMatch({{ok, _}, _, _}, Ret_betree1_search),
+  {{ok, Ids}, _, IterationCount} = Ret_betree1_search,
+  ?assertEqual([1], Ids),
+  ?assertEqual(2, IterationCount).
