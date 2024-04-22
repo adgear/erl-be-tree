@@ -2022,6 +2022,23 @@ static ERL_NIF_TERM nif_search_with_cached_ids(ErlNifEnv* env, int argc, const E
     return retval;
 }
 
+static void bump_used_reductions_time_based(ErlNifEnv* env, ErlNifTime duration, int threshold)
+{
+    if (threshold <= 0) {
+        enif_consume_timeslice(env, 100);
+        return;
+    }
+    int pct_used = duration * 100 / threshold;
+    if(pct_used > 0) {
+        if(pct_used > 100) {
+            pct_used = 100;
+        }
+    } else {
+        pct_used = 1;
+    }
+    enif_consume_timeslice(env, pct_used);
+}
+
 static ERL_NIF_TERM nif_betree_search_yield(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
     if(argc != 4) {
