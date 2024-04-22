@@ -423,3 +423,73 @@ timing_test() ->
 %%  ?debugFmt("~nbetree_search: ~p~n", [Elapsed]).
 
   ?assert(ElapsedMakeEvent + ElapsedSearchYield >= Elapsed).
+
+iteration_counting_threshold_0_test() ->
+  Domains = [[
+    {par1,bool,disallow_undefined},
+    {par2,bool,disallow_undefined},
+    {par3,bool,disallow_undefined}
+  ]],
+  {ok, Betree1} = erl_betree:betree_make(Domains),
+
+  Expr1 = <<"par1">>,
+  {ok, Sub1} = erl_betree:betree_make_sub(Betree1, 1, [], Expr1),
+  ok = erl_betree:betree_insert_sub(Betree1, Sub1),
+
+  Expr2 = <<"par2">>,
+  {ok, Sub2} = erl_betree:betree_make_sub(Betree1, 2, [], Expr2),
+  ok = erl_betree:betree_insert_sub(Betree1, Sub2),
+
+  Expr3 = <<"par3">>,
+  {ok, Sub3} = erl_betree:betree_make_sub(Betree1, 3, [], Expr3),
+  ok = erl_betree:betree_insert_sub(Betree1, Sub3),
+
+  Expr4 = <<"par1 and par2">>,
+  {ok, Sub4} = erl_betree:betree_make_sub(Betree1, 4, [], Expr4),
+  ok = erl_betree:betree_insert_sub(Betree1, Sub4),
+
+  Event = [{bool_event, true, true, true}],
+  Ret_betree_make_event = erl_betree:betree_make_event(Betree1, Event),
+  ?assertMatch({{ok, _}, _}, Ret_betree_make_event),
+  {{ok, Evt}, _ElapsedMakeEvent} = Ret_betree_make_event,
+
+  Ret_betree1_search_yield = erl_betree:search_yield_count(Betree1, Evt, ?CLOCK_MONOTONIC, ?THRESHOLD_0_MICROSECONDS, 0),
+  ?assertMatch({{ok, _}, _, _}, Ret_betree1_search_yield),
+  {{ok, IdsYield}, _ElapsedSearchYield, IterationCount} = Ret_betree1_search_yield,
+  ?assertEqual([1, 2, 3, 4], lists:sort(IdsYield)),
+  ?assertEqual(4, IterationCount).
+
+iteration_counting_threshold_1_000_test() ->
+  Domains = [[
+    {par1,bool,disallow_undefined},
+    {par2,bool,disallow_undefined},
+    {par3,bool,disallow_undefined}
+  ]],
+  {ok, Betree1} = erl_betree:betree_make(Domains),
+
+  Expr1 = <<"par1">>,
+  {ok, Sub1} = erl_betree:betree_make_sub(Betree1, 1, [], Expr1),
+  ok = erl_betree:betree_insert_sub(Betree1, Sub1),
+
+  Expr2 = <<"par2">>,
+  {ok, Sub2} = erl_betree:betree_make_sub(Betree1, 2, [], Expr2),
+  ok = erl_betree:betree_insert_sub(Betree1, Sub2),
+
+  Expr3 = <<"par3">>,
+  {ok, Sub3} = erl_betree:betree_make_sub(Betree1, 3, [], Expr3),
+  ok = erl_betree:betree_insert_sub(Betree1, Sub3),
+
+  Expr4 = <<"par1 and par2">>,
+  {ok, Sub4} = erl_betree:betree_make_sub(Betree1, 4, [], Expr4),
+  ok = erl_betree:betree_insert_sub(Betree1, Sub4),
+
+  Event = [{bool_event, true, true, true}],
+  Ret_betree_make_event = erl_betree:betree_make_event(Betree1, Event),
+  ?assertMatch({{ok, _}, _}, Ret_betree_make_event),
+  {{ok, Evt}, _ElapsedMakeEvent} = Ret_betree_make_event,
+
+  Ret_betree1_search_yield = erl_betree:search_yield_count(Betree1, Evt, ?CLOCK_MONOTONIC, ?THRESHOLD_1_000_MICROSECONDS, 0),
+  ?assertMatch({{ok, _}, _, _}, Ret_betree1_search_yield),
+  {{ok, IdsYield}, _ElapsedSearchYield, IterationCount} = Ret_betree1_search_yield,
+  ?assertEqual([1, 2, 3, 4], lists:sort(IdsYield)),
+  ?assertEqual(1, IterationCount).
