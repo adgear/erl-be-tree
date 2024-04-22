@@ -22,7 +22,7 @@
 
     % search with yield
     betree_search_yield/2,
-    betree_search_yield/4,
+    search_yield_count/5,
     search_yield/3,
     search_yield/4,
     search_next_yield/3,
@@ -83,25 +83,26 @@ search_iterator_release(Iterator) ->
     erl_betree_nif:search_iterator_release(Iterator).
 
 betree_search_yield(Betree, Event) ->
-    betree_search_yield(Betree, Event, ?CLOCK_MONOTONIC, ?THRESHOLD_1_000_MICROSECONDS).
+    {{ok, _Ids}, _Elapsed, _Acc} = search_yield_count(Betree, Event, ?CLOCK_MONOTONIC, ?THRESHOLD_1_000_MICROSECONDS, 0),
+    {{ok, _Ids}, _Elapsed}.
 
-betree_search_yield(Betree, Event, ClockType, YieldThresholdInMicroseconds)
+search_yield_count(Betree, Event, ClockType, YieldThresholdInMicroseconds, Acc)
     when is_reference(Event),
     is_integer(ClockType),
     is_integer(YieldThresholdInMicroseconds) ->
     case search_yield(Betree, Event, ClockType, YieldThresholdInMicroseconds) of
-        {{ok, _Ids}, _Elapsed} = Ret ->
-            Ret;
+        {{ok, _Ids}, _Elapsed} ->
+            {{ok, _Ids}, _Elapsed, Acc+1};
         {{continue, SearchState}, _} ->
-            betree_search_next_yield(SearchState, ClockType, YieldThresholdInMicroseconds)
+            search_next_yield_count(SearchState, ClockType, YieldThresholdInMicroseconds, Acc)
     end.
 
-betree_search_next_yield(SearchState, ClockType, YieldThresholdInMicroseconds) ->
+search_next_yield_count(SearchState, ClockType, YieldThresholdInMicroseconds, Acc) ->
     case search_next_yield(SearchState, ClockType, YieldThresholdInMicroseconds) of
-        {{ok, _Ids}, _Elapsed} = Ret ->
-            Ret;
+        {{ok, _Ids}, _Elapsed} ->
+            {{ok, _Ids}, _Elapsed, Acc+1};
         {{continue, SearchState}, _} ->
-            betree_search_next_yield(SearchState, ClockType, YieldThresholdInMicroseconds)
+            search_next_yield_count(SearchState, ClockType, YieldThresholdInMicroseconds, Acc+1)
     end.
 
 search_yield(Betree, Event, ClockType) ->
