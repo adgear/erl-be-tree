@@ -62,7 +62,6 @@ betree_search_ids(Betree, Event, Ids) ->
 % Also calculates time spend in NIF. 
 % Time value is in microseconds - the erlang:timestamp resolution.  
 betree_search_ids(_Betree, _Event, [], _CLockType)  ->
-%%    {0, []};
     {{ok, []}, 0};
 betree_search_ids(Betree, Event, Ids, ClockType) when is_list(Event), is_integer(ClockType) ->
     erl_betree_nif:betree_search_ids(Betree, Event, Ids, ClockType);

@@ -342,6 +342,132 @@ three_betrees_search_then_betrees_search_ids_test() ->
   {{ok, Matched3}, _} = Ret_betree3_search_ids,
   ?assertEqual([1], Matched3).
 
+search_empty_list_of_ids_test() ->
+  Domains = [[
+    {par1,bool,disallow_undefined},
+    {par2,bool,disallow_undefined}
+  ]],
+  {ok, Betree1} = erl_betree:betree_make(Domains),
+  Expr1 = <<"par1">>,
+  {ok, Sub1} = erl_betree:betree_make_sub(Betree1, 1, [], Expr1),
+  ok = erl_betree:betree_insert_sub(Betree1, Sub1),
+
+  {ok, Betree2} = erl_betree:betree_make(Domains),
+  Expr2 = <<"par2">>,
+  {ok, Sub2} = erl_betree:betree_make_sub(Betree2, 1, [], Expr2),
+  ok = erl_betree:betree_insert_sub(Betree2, Sub2),
+
+  Event = [{bool_event, true, true}],
+  Ret_betree_make_event = erl_betree:betree_make_event(Betree1, Event),
+  ?assertMatch({{ok, _}, _}, Ret_betree_make_event),
+  {{ok, Evt}, _} = Ret_betree_make_event,
+
+  Ret_betree1_search = erl_betree:betree_search(Betree1, Evt, 0),
+  ?assertMatch({{ok, _}, _}, Ret_betree1_search),
+  {{ok, Matched1}, _} = Ret_betree1_search,
+  ?assertEqual([1], Matched1),
+
+  % Search empty list of Ids
+  Ret_betree2_search_ids = erl_betree:betree_search_ids(Betree2, Evt, [], 0),
+  ?assertMatch({{ok, _}, _}, Ret_betree2_search_ids),
+  {{ok, Matched2}, Elapsed} = Ret_betree2_search_ids,
+  ?assertEqual([], Matched2),
+  ?assertEqual(0, Elapsed).
+
+not_and_test() ->
+  Params = [
+    {p1, bool, disallow_undefined},
+    {p2, bool, disallow_undefined},
+    {p3, bool, disallow_undefined}
+  ],
+
+  Event = [{bool_event, true, true, false}],
+  % i.e. p1 = true, p2 = true, p3 = false
+
+  Expr1 = <<"p1 or (p2 and p3)">>,
+  % p1 or (p2 and p3) = true or (true and false) = true
+  Id1 = 101,
+
+  Expr2 = <<"(p3 and p1) or p2">>,
+  % (p3 and p1) or p2 = (false and true) or true = true
+  Id2 = 202,
+
+  Expr3 = <<"(not (p3 and p1)) and p2">>,
+  % (not (p3 and p1)) and p2 = (not (false and true)) and true = true
+  Id3 = 303,
+
+  Expr4 = <<"(p2 or p3) or p1">>,
+  % (p2 or p3) or p1 = (true or false) or true = true
+  Id4 = 404,
+
+  {ok, Betree} = erl_betree:betree_make([Params]),
+
+  {ok, Sub1} = erl_betree:betree_make_sub(Betree, Id1, [], Expr1),
+  ok = erl_betree:betree_insert_sub(Betree, Sub1),
+
+  {ok, Sub2} = erl_betree:betree_make_sub(Betree, Id2, [], Expr2),
+  ok = erl_betree:betree_insert_sub(Betree, Sub2),
+
+  {ok, Sub3} = erl_betree:betree_make_sub(Betree, Id3, [], Expr3),
+  ok = erl_betree:betree_insert_sub(Betree, Sub3),
+
+  {ok, Sub4} = erl_betree:betree_make_sub(Betree, Id4, [], Expr4),
+  ok = erl_betree:betree_insert_sub(Betree, Sub4),
+
+  Ret = erl_betree:betree_search(Betree, Event),
+  ?assertMatch({ok, _}, Ret),
+  {ok, Ids} = Ret,
+  ?assertEqual([Id1, Id2, Id3, Id4], lists:sort(Ids)).
+
+not_or_test() ->
+  Params = [
+    {p1, bool, disallow_undefined},
+    {p2, bool, disallow_undefined},
+    {p3, bool, disallow_undefined}
+  ],
+
+  Event = [{bool_event, false, true, false}],
+  % i.e. p1 = false, p2 = true, p3 = false
+
+  Expr2 = <<"p1 or (p2 or p3)">>,
+  % p1 or (p2 or p3) = false or (true or false) = true
+  Id2 = 202,
+
+  Expr3 = <<"(p1 and p2) or p3">>,
+  % (p1 and p2) or p3 = (false and true) or false = false
+  Id3 = 303,
+
+  Expr4 = <<"(not ((not p1) and p3)) and p2">>,
+  % (not ((not p1) and p3)) and p2 =
+  % (not ((not false) and false)) and true =
+  % (not (true and false)) and true =
+  % (not false) and true = true
+  Id4 = 404,
+
+  Expr1 = <<"p2 and not (p3 or p1)">>,
+  % p2 and not (p3 or p1) = true and not (false or false) = true
+  Id1 = 101,
+
+  {ok, Betree} = erl_betree:betree_make([Params]),
+
+  {ok, Sub3} = erl_betree:betree_make_sub(Betree, Id3, [], Expr3),
+  ok = erl_betree:betree_insert_sub(Betree, Sub3),
+
+  {ok, Sub2} = erl_betree:betree_make_sub(Betree, Id2, [], Expr2),
+  ok = erl_betree:betree_insert_sub(Betree, Sub2),
+
+  {ok, Sub4} = erl_betree:betree_make_sub(Betree, Id4, [], Expr4),
+  ok = erl_betree:betree_insert_sub(Betree, Sub4),
+
+  {ok, Sub1} = erl_betree:betree_make_sub(Betree, Id1, [], Expr1),
+  ok = erl_betree:betree_insert_sub(Betree, Sub1),
+
+  Ret = erl_betree:betree_search(Betree, Event),
+  ?assertMatch({ok, _}, Ret),
+  {ok, Ids} = Ret,
+  ?assert(is_list(Ids)),
+  ?assertEqual([Id1, Id2, Id4], lists:sort(Ids)).
+
 search_and_cache_ids_test() ->
   Domains = [[
     {par1,bool,disallow_undefined},
