@@ -139,13 +139,12 @@ with_yield_betree_search(Term, #be_evaluator{betree = Betree} = Context) ->
     [event | [case N of 1 -> true; _ -> false end|| N <- Term]])],
   {{ok, CompiledEvent}, _} = erl_betree:betree_make_event(Betree, Event),
   BeginNano = erlang:monotonic_time(nanosecond),
-  SearchRet = erl_betree:betree_search_yield(Betree, CompiledEvent),
-  SearchRet = erl_betree:search_yield_count(Betree, CompiledEvent, ?CLOCK_MONOTONIC, ?THRESHOLD_1_000_MICROSECONDS, 0),
+  SearchRet = erl_betree:search_yield_count(Betree, CompiledEvent),
   EndNano = erlang:monotonic_time(nanosecond),
   CurrentAllocations = be_bm_utils:betree_allocations(),
   DiffNano = EndNano - BeginNano,
   case SearchRet of
-    {{ok, Ids}, _} -> {{ok, {Ids, {DiffNano, CurrentAllocations}}}, Context};
+    {{ok, Ids}, _, Iterations} -> {{ok, {Ids, {DiffNano, CurrentAllocations, Iterations}}}, Context};
     X -> {{error, {betree_search, X}}, Context}
   end.
 
