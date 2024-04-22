@@ -1,4 +1,5 @@
 -module(erl_betree).
+-include("erl_betree.hrl").
 
 -export([
     betree_make/1,
@@ -12,20 +13,24 @@
     betree_search_ids/3,
     betree_search_ids/4,
     betree_write_dot/2,
+
+    % search with iterator
     search_iterator/2,
     search_next/1,
     search_all/1,
     search_iterator_release/1,
 
+    % search with yield
+    betree_search_yield/2,
+    betree_search_yield/4,
+    search_yield/3,
+    search_yield/4,
+    search_next_yield/3,
+
     search_and_cache_ids/2,
     search_with_cached_ids/3
 ]).
 
-
-% -define(CLOCK_REALTIME, 0). 
--define(CLOCK_MONOTONIC, 1). 
-% -define(CLOCK_PROCESS_CPUTIME_ID, 2). 
-% -define(CLOCK_THREAD_CPUTIME_ID, 3). 
 
 betree_make(Domains) ->
     erl_betree_nif:betree_make(Domains).
@@ -76,6 +81,43 @@ search_all(Iterator) ->
     erl_betree_nif:search_all(Iterator).
 search_iterator_release(Iterator) ->
     erl_betree_nif:search_iterator_release(Iterator).
+
+betree_search_yield(Betree, Event) ->
+    betree_search_yield(Betree, Event, ?CLOCK_MONOTONIC, ?THRESHOLD_1_000_MICROSECONDS).
+
+betree_search_yield(Betree, Event, ClockType, YieldThresholdInMicroseconds)
+    when is_reference(Event),
+    is_integer(ClockType),
+    is_integer(YieldThresholdInMicroseconds) ->
+    case search_yield(Betree, Event, ClockType, YieldThresholdInMicroseconds) of
+        {{ok, _Ids}, _Elapsed} = Ret ->
+            Ret;
+        {{continue, SearchState}, _} ->
+            betree_search_next_yield(SearchState, ClockType, YieldThresholdInMicroseconds)
+    end.
+
+betree_search_next_yield(SearchState, ClockType, YieldThresholdInMicroseconds) ->
+    case search_next_yield(SearchState, ClockType, YieldThresholdInMicroseconds) of
+        {{ok, _Ids}, _Elapsed} = Ret ->
+            Ret;
+        {{continue, SearchState}, _} ->
+            betree_search_next_yield(SearchState, ClockType, YieldThresholdInMicroseconds)
+    end.
+
+search_yield(Betree, Event, ClockType) ->
+    search_yield(Betree, Event, ClockType, ?THRESHOLD_1_000_MICROSECONDS).
+
+search_yield(Betree, Event, ClockType, YieldThresholdInMicroseconds)
+    when is_reference(Event),
+    is_integer(ClockType),
+    is_integer(YieldThresholdInMicroseconds) ->
+    erl_betree_nif:search_yield(Betree, Event, ClockType, YieldThresholdInMicroseconds).
+
+search_next_yield(SearchState, ClockType, YieldThresholdInMicroseconds)
+    when is_reference(SearchState),
+    is_integer(ClockType),
+    is_integer(YieldThresholdInMicroseconds) ->
+    erl_betree_nif:search_next_yield(SearchState, ClockType, YieldThresholdInMicroseconds).
 
 search_and_cache_ids(Betree, Event) ->
     erl_betree_nif:search_and_cache_ids(Betree, Event).
