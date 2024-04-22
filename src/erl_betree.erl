@@ -26,7 +26,10 @@
     search_yield_count/5,
     search_yield/3,
     search_yield/4,
-    search_next_yield/3
+    search_next_yield/3,
+
+    betree_search_ids_yield/3,
+    search_ids_yield/5
 ]).
 
 
@@ -120,3 +123,14 @@ search_next_yield(SearchState, ClockType, YieldThresholdInMicroseconds)
     is_integer(ClockType),
     is_integer(YieldThresholdInMicroseconds) ->
     erl_betree_nif:search_next_yield(SearchState, ClockType, YieldThresholdInMicroseconds).
+
+betree_search_ids_yield(Betree, Event, Ids) ->
+    search_ids_yield(Betree, Event, Ids, ?CLOCK_MONOTONIC, ?THRESHOLD_1_000_MICROSECONDS).
+
+search_ids_yield(_Betree, _Event, _Ids = [], _ClockType, _YieldThresholdInMicroseconds) ->
+    {{ok, []}, 0};
+search_ids_yield(Betree, Event, Ids = [_|_], ClockType, YieldThresholdInMicroseconds)
+    when is_reference(Event),
+    is_integer(ClockType),
+    is_integer(YieldThresholdInMicroseconds) ->
+    erl_betree_nif:search_ids_yield(Betree, Event, Ids, ClockType, YieldThresholdInMicroseconds).
