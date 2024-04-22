@@ -19,6 +19,8 @@
     search_next/1,
     search_all/1,
     search_iterator_release/1,
+    search_and_cache_ids/2,
+    search_with_cached_ids/3,
 
     % search with yield
     betree_search_yield/2,
@@ -28,8 +30,8 @@
     search_yield/4,
     search_next_yield/3,
 
-    search_and_cache_ids/2,
-    search_with_cached_ids/3
+    betree_search_ids_yield/3,
+    search_ids_yield/5
 ]).
 
 
@@ -83,6 +85,12 @@ search_all(Iterator) ->
 search_iterator_release(Iterator) ->
     erl_betree_nif:search_iterator_release(Iterator).
 
+search_and_cache_ids(Betree, Event) ->
+    erl_betree_nif:search_and_cache_ids(Betree, Event).
+
+search_with_cached_ids(Betree, Event, Ids) ->
+    erl_betree_nif:search_with_cached_ids(Betree, Event, Ids).
+
 betree_search_yield(Betree, Event) ->
     {{ok, _Ids}, _Elapsed, _Acc} = search_yield_count(Betree, Event),
     {{ok, _Ids}, _Elapsed}.
@@ -124,8 +132,13 @@ search_next_yield(SearchState, ClockType, YieldThresholdInMicroseconds)
     is_integer(YieldThresholdInMicroseconds) ->
     erl_betree_nif:search_next_yield(SearchState, ClockType, YieldThresholdInMicroseconds).
 
-search_and_cache_ids(Betree, Event) ->
-    erl_betree_nif:search_and_cache_ids(Betree, Event).
+betree_search_ids_yield(Betree, Event, Ids) ->
+    search_ids_yield(Betree, Event, Ids, ?CLOCK_MONOTONIC, ?THRESHOLD_1_000_MICROSECONDS).
 
-search_with_cached_ids(Betree, Event, Ids) ->
-    erl_betree_nif:search_with_cached_ids(Betree, Event, Ids).
+search_ids_yield(_Betree, _Event, _Ids = [], _ClockType, _YieldThresholdInMicroseconds) ->
+    {{ok, []}, 0};
+search_ids_yield(Betree, Event, Ids = [_|_], ClockType, YieldThresholdInMicroseconds)
+    when is_reference(Event),
+    is_integer(ClockType),
+    is_integer(YieldThresholdInMicroseconds) ->
+    erl_betree_nif:search_ids_yield(Betree, Event, Ids, ClockType, YieldThresholdInMicroseconds).

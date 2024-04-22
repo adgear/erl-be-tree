@@ -21,13 +21,14 @@
     search_next/1,
     search_all/1,
     search_iterator_release/1,
+    search_and_cache_ids/2,
+    search_with_cached_ids/3,
 
     % search with yield
     search_yield/4,
     search_next_yield/3,
 
-    search_and_cache_ids/2,
-    search_with_cached_ids/3
+    search_ids_yield/5
 ]).
 
 -spec on_load() -> ok.
@@ -84,12 +85,15 @@ search_all(_Iterator) ->
 search_iterator_release(_Iterator) ->
     ?nif_stub.
 
+search_and_cache_ids(_Betree, _Event) ->
+    ?nif_stub.
+search_with_cached_ids(_Betree, _Event, _Ids) ->
+    ?nif_stub.
+
 search_yield(_Betree, _Event, _ClockType, _YieldThresholdInMicroseconds) ->
     ?nif_stub.
 search_next_yield(_SearchState, _ClockType, _YieldThresholdInMicroseconds) ->
     ?nif_stub.
 
-search_and_cache_ids(_Betree, _Event) ->
-    ?nif_stub.
-search_with_cached_ids(_Betree, _Event, _Ids) ->
+search_ids_yield(_Betree, _Event, _Ids, _ClockType, _YieldThresholdInMicroseconds) ->
     ?nif_stub.

@@ -1290,200 +1290,6 @@ cleanup:
     return enif_make_tuple2(env, retval, etspent);
 }
 
-static void bump_used_reductions_time_based(ErlNifEnv* env, ErlNifTime duration, int threshold)
-{
-    if (threshold <= 0) {
-        enif_consume_timeslice(env, 100);
-        return;
-    }
-    int pct_used = duration * 100 / threshold;
-    if(pct_used > 0) {
-        if(pct_used > 100) {
-            pct_used = 100;
-        }
-    } else {
-        pct_used = 1;
-    }
-    enif_consume_timeslice(env, pct_used);
-}
-
-static ERL_NIF_TERM nif_betree_search_yield(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
-{
-    if(argc != 4) {
-        return enif_make_badarg(env);
-    }
-
-    int clock_type;
-    if (!enif_get_int(env, argv[2], &clock_type)) {
-        return enif_make_badarg(env);
-    }
-    clock_type = reverse_get_clock_type(clock_type);
-    struct timespec start, done;
-    clock_gettime(clock_type, &start);
-
-    ErlNifTime timeslice_start = enif_monotonic_time(ERL_NIF_USEC);
-
-    int yield_threshold_microseconds;
-    if (!enif_get_int(env, argv[3], &yield_threshold_microseconds)) {
-        return enif_make_badarg(env);
-    }
-
-    struct betree* betree = get_betree(env, argv[0]);
-    if(betree == NULL) {
-        return enif_make_badarg(env);
-    }
-
-    struct evt* evt = get_evt(env, argv[1]);
-    if(evt == NULL) {
-        return enif_make_badarg(env);
-    }
-    struct betree_event* event = evt->event;
-
-    fill_event(betree->config, event);
-    sort_event_lists(event);
-    const struct betree_variable** variables =
-            make_environment(betree->config->attr_domain_count, event);
-    if(validate_variables(betree->config, variables) == false) {
-        fprintf(stderr, "Failed to validate event\n");
-        return enif_make_badarg(env);
-    }
-
-    struct subs_to_eval subs;
-    init_subs_to_eval_ext(&subs, 1024);
-    match_be_tree((const struct attr_domain**)betree->config->attr_domains,
-                   variables, betree->cnode, &subs);
-    if (subs.count == 0) {
-        ERL_NIF_TERM tmp[1];
-        ERL_NIF_TERM matched = enif_make_list_from_array(env, tmp, 0);
-        clock_gettime(clock_type, &done);
-        ERL_NIF_TERM elapsed = make_time(env, &start, &done);
-
-        ERL_NIF_TERM ret = enif_make_tuple2(env, atom_ok, matched);
-        return enif_make_tuple2(env, ret, elapsed);
-    }
-
-    uint64_t* undefined = make_undefined(betree->config->attr_domain_count, variables);
-    struct memoize memoize = make_memoize(betree->config->pred_map->memoize_count);
-
-    struct report* report = make_report();
-    size_t index = 0;
-    while (index < subs.count) {
-        ErlNifTime timeslice_checkpoint = enif_monotonic_time(ERL_NIF_USEC);
-        if (timeslice_checkpoint - timeslice_start >= yield_threshold_microseconds) {
-            clock_gettime(clock_type, &done);
-            ERL_NIF_TERM search_state = save_search_state(env,
-                betree->config->attr_domain_count,
-                variables,
-                undefined,
-                &memoize,
-                &subs,
-                report,
-                index,
-                &start, &done);
-            ERL_NIF_TERM elapsed = make_time(env, &start, &done);
-            ERL_NIF_TERM ret = enif_make_tuple2(env, atom_continue, search_state);
-            enif_consume_timeslice(env, 100);
-            return enif_make_tuple2(env, ret, elapsed);
-        }
-
-        const struct betree_sub* sub = subs.subs[index];
-        report->evaluated++;
-        if(match_sub(betree->config->attr_domain_count,
-                     variables,
-                     sub,
-                     report,
-                     &memoize,
-                     undefined) == true) {
-            add_sub(sub->id, report);
-        }
-
-        ++index;
-    }
-
-    ERL_NIF_TERM matched = ids_from_report(env, report);
-
-    bfree(variables);
-    bfree(subs.subs);
-    bfree(undefined);
-    free_memoize(memoize);
-    free_report(report);
-
-    clock_gettime(clock_type, &done);
-    ERL_NIF_TERM elapsed = make_time(env, &start, &done);
-    ERL_NIF_TERM ret = enif_make_tuple2(env, atom_ok, matched);
-
-    ErlNifTime timeslice_checkpoint = enif_monotonic_time(ERL_NIF_USEC);
-    bump_used_reductions_time_based(env,
-        timeslice_checkpoint - timeslice_start, yield_threshold_microseconds);
-    return enif_make_tuple2(env, ret, elapsed);
-}
-
-static ERL_NIF_TERM nif_betree_search_next_yield(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
-{
-    if(argc != 3) {
-        return enif_make_badarg(env);
-    }
-
-    int clock_type;
-    if (!enif_get_int(env, argv[1], &clock_type)) {
-        return enif_make_badarg(env);
-    }
-    clock_type = reverse_get_clock_type(clock_type);
-    struct timespec start, done;
-    clock_gettime(clock_type, &start);
-
-    ErlNifTime timeslice_start = enif_monotonic_time(ERL_NIF_USEC);
-
-    int yield_threshold_microseconds;
-    if (!enif_get_int(env, argv[2], &yield_threshold_microseconds)) {
-        return enif_make_badarg(env);
-    }
-
-    struct search_state* search_state = get_search_state(env, argv[0]);
-    if(search_state == NULL) {
-        return enif_make_badarg(env);
-    }
-
-    while (search_state->index < search_state->subs.count) {
-
-        const struct betree_sub* sub = search_state->subs.subs[search_state->index];
-        search_state->report->evaluated++;
-        if(match_sub(search_state->attr_domain_count,
-                     search_state->variables,
-                     sub,
-                     search_state->report,
-                     &search_state->memoize,
-                     search_state->undefined) == true) {
-            add_sub(sub->id, search_state->report);
-        }
-
-        search_state->index++;
-
-        if (search_state->index < search_state->subs.count) {
-            ErlNifTime timeslice_checkpoint = enif_monotonic_time(ERL_NIF_USEC);
-            if (timeslice_checkpoint - timeslice_start >= yield_threshold_microseconds) {
-                clock_gettime(clock_type, &search_state->current);
-                ERL_NIF_TERM elapsed = make_time(env, &start, &search_state->current);
-                ERL_NIF_TERM ret = enif_make_tuple2(env, atom_continue, argv[0]);
-                enif_consume_timeslice(env, 100);
-                return enif_make_tuple2(env, ret, elapsed);
-            }
-        }
-    }
-
-    ERL_NIF_TERM matched = ids_from_report(env, search_state->report);
-
-    ERL_NIF_TERM ret = enif_make_tuple2(env, atom_ok, matched);
-    clock_gettime(clock_type, &done);
-    ERL_NIF_TERM elapsed = make_time(env, &search_state->start, &done);
-
-    ErlNifTime timeslice_checkpoint = enif_monotonic_time(ERL_NIF_USEC);
-    bump_used_reductions_time_based(env,
-        timeslice_checkpoint - timeslice_start, yield_threshold_microseconds);
-
-    return enif_make_tuple2(env, ret, elapsed);
-}
-
 static ERL_NIF_TERM nif_betree_search_evt_ids(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
     ERL_NIF_TERM retval;
@@ -2051,6 +1857,7 @@ static ERL_NIF_TERM nif_betree_search_iterator_release(ErlNifEnv* env, int argc,
     return atom_ok;
 }
 
+
 static ERL_NIF_TERM nif_search_and_cache_ids(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
     ERL_NIF_TERM retval;
@@ -2215,6 +2022,263 @@ static ERL_NIF_TERM nif_search_with_cached_ids(ErlNifEnv* env, int argc, const E
     return retval;
 }
 
+static ERL_NIF_TERM nif_betree_search_yield(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    if(argc != 4) {
+        return enif_make_badarg(env);
+    }
+
+    int clock_type;
+    if (!enif_get_int(env, argv[2], &clock_type)) {
+        return enif_make_badarg(env);
+    }
+    clock_type = reverse_get_clock_type(clock_type);
+    struct timespec start, done;
+    clock_gettime(clock_type, &start);
+
+    ErlNifTime timeslice_start = enif_monotonic_time(ERL_NIF_USEC);
+
+    int yield_threshold_microseconds;
+    if (!enif_get_int(env, argv[3], &yield_threshold_microseconds)) {
+        return enif_make_badarg(env);
+    }
+
+    struct betree* betree = get_betree(env, argv[0]);
+    if(betree == NULL) {
+        return enif_make_badarg(env);
+    }
+
+    struct evt* evt = get_evt(env, argv[1]);
+    if(evt == NULL) {
+        return enif_make_badarg(env);
+    }
+    struct betree_event* event = evt->event;
+
+    fill_event(betree->config, event);
+    sort_event_lists(event);
+    const struct betree_variable** variables =
+            make_environment(betree->config->attr_domain_count, event);
+    if(validate_variables(betree->config, variables) == false) {
+        fprintf(stderr, "Failed to validate event\n");
+        return enif_make_badarg(env);
+    }
+
+    struct subs_to_eval subs;
+    init_subs_to_eval_ext(&subs, 1024);
+    match_be_tree((const struct attr_domain**)betree->config->attr_domains,
+                  variables, betree->cnode, &subs);
+    if (subs.count == 0) {
+        ERL_NIF_TERM tmp[1];
+        ERL_NIF_TERM matched = enif_make_list_from_array(env, tmp, 0);
+        clock_gettime(clock_type, &done);
+        ERL_NIF_TERM elapsed = make_time(env, &start, &done);
+
+        ERL_NIF_TERM ret = enif_make_tuple2(env, atom_ok, matched);
+        return enif_make_tuple2(env, ret, elapsed);
+    }
+
+    uint64_t* undefined = make_undefined(betree->config->attr_domain_count, variables);
+    struct memoize memoize = make_memoize(betree->config->pred_map->memoize_count);
+
+    struct report* report = make_report();
+    size_t index = 0;
+    while (index < subs.count) {
+        ErlNifTime timeslice_checkpoint = enif_monotonic_time(ERL_NIF_USEC);
+        if (timeslice_checkpoint - timeslice_start >= yield_threshold_microseconds) {
+            clock_gettime(clock_type, &done);
+            ERL_NIF_TERM search_state = save_search_state(env,
+                                                          betree->config->attr_domain_count,
+                                                          variables,
+                                                          undefined,
+                                                          &memoize,
+                                                          &subs,
+                                                          report,
+                                                          index,
+                                                          &start, &done);
+            ERL_NIF_TERM elapsed = make_time(env, &start, &done);
+            ERL_NIF_TERM ret = enif_make_tuple2(env, atom_continue, search_state);
+            enif_consume_timeslice(env, 100);
+            return enif_make_tuple2(env, ret, elapsed);
+        }
+
+        const struct betree_sub* sub = subs.subs[index];
+        report->evaluated++;
+        if(match_sub(betree->config->attr_domain_count,
+                     variables,
+                     sub,
+                     report,
+                     &memoize,
+                     undefined) == true) {
+            add_sub(sub->id, report);
+        }
+
+        ++index;
+    }
+
+    ERL_NIF_TERM matched = ids_from_report(env, report);
+
+    bfree(variables);
+    bfree(subs.subs);
+    bfree(undefined);
+    free_memoize(memoize);
+    free_report(report);
+
+    clock_gettime(clock_type, &done);
+    ERL_NIF_TERM elapsed = make_time(env, &start, &done);
+    ERL_NIF_TERM ret = enif_make_tuple2(env, atom_ok, matched);
+
+    ErlNifTime timeslice_checkpoint = enif_monotonic_time(ERL_NIF_USEC);
+    bump_used_reductions_time_based(env,
+                                    timeslice_checkpoint - timeslice_start, yield_threshold_microseconds);
+    return enif_make_tuple2(env, ret, elapsed);
+}
+
+static ERL_NIF_TERM nif_betree_search_next_yield(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    if(argc != 3) {
+        return enif_make_badarg(env);
+    }
+
+    int clock_type;
+    if (!enif_get_int(env, argv[1], &clock_type)) {
+        return enif_make_badarg(env);
+    }
+    clock_type = reverse_get_clock_type(clock_type);
+    struct timespec start, done;
+    clock_gettime(clock_type, &start);
+
+    ErlNifTime timeslice_start = enif_monotonic_time(ERL_NIF_USEC);
+
+    int yield_threshold_microseconds;
+    if (!enif_get_int(env, argv[2], &yield_threshold_microseconds)) {
+        return enif_make_badarg(env);
+    }
+
+    struct search_state* search_state = get_search_state(env, argv[0]);
+    if(search_state == NULL) {
+        return enif_make_badarg(env);
+    }
+
+    while (search_state->index < search_state->subs.count) {
+
+        const struct betree_sub* sub = search_state->subs.subs[search_state->index];
+        search_state->report->evaluated++;
+        if(match_sub(search_state->attr_domain_count,
+                     search_state->variables,
+                     sub,
+                     search_state->report,
+                     &search_state->memoize,
+                     search_state->undefined) == true) {
+            add_sub(sub->id, search_state->report);
+        }
+
+        search_state->index++;
+
+        if (search_state->index < search_state->subs.count) {
+            ErlNifTime timeslice_checkpoint = enif_monotonic_time(ERL_NIF_USEC);
+            if (timeslice_checkpoint - timeslice_start >= yield_threshold_microseconds) {
+                clock_gettime(clock_type, &search_state->current);
+                ERL_NIF_TERM elapsed = make_time(env, &start, &search_state->current);
+                ERL_NIF_TERM ret = enif_make_tuple2(env, atom_continue, argv[0]);
+                enif_consume_timeslice(env, 100);
+                return enif_make_tuple2(env, ret, elapsed);
+            }
+        }
+    }
+
+    ERL_NIF_TERM matched = ids_from_report(env, search_state->report);
+
+    ERL_NIF_TERM ret = enif_make_tuple2(env, atom_ok, matched);
+    clock_gettime(clock_type, &done);
+    ERL_NIF_TERM elapsed = make_time(env, &search_state->start, &done);
+
+    ErlNifTime timeslice_checkpoint = enif_monotonic_time(ERL_NIF_USEC);
+    bump_used_reductions_time_based(env,
+                                    timeslice_checkpoint - timeslice_start, yield_threshold_microseconds);
+
+    return enif_make_tuple2(env, ret, elapsed);
+}
+
+static ERL_NIF_TERM nif_betree_search_ids_yield(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    if(argc != 5) {
+        return enif_make_badarg(env);
+    }
+
+    int clock_type;
+    if (!enif_get_int(env, argv[3], &clock_type)) {
+        return enif_make_badarg(env);
+    }
+    clock_type = reverse_get_clock_type(clock_type);
+    struct timespec start, done;
+    clock_gettime(clock_type, &start);
+
+    ErlNifTime timeslice_start = enif_monotonic_time(ERL_NIF_USEC);
+
+    int yield_threshold_microseconds;
+    if (!enif_get_int(env, argv[4], &yield_threshold_microseconds)) {
+        return enif_make_badarg(env);
+    }
+
+    struct betree* betree = get_betree(env, argv[0]);
+    if(betree == NULL) {
+        return enif_make_badarg(env);
+    }
+
+    struct evt* evt = get_evt(env, argv[1]);
+    if(evt == NULL) {
+        return enif_make_badarg(env);
+    }
+    struct betree_event* event = evt->event;
+
+    unsigned int len;
+    if(!enif_get_list_length(env, argv[2], &len) || len == 0) {
+        return enif_make_badarg(env);
+    }
+
+    ERL_NIF_TERM head;
+    ERL_NIF_TERM tail = argv[2];
+    uint64_t* ids = enif_alloc(len * sizeof(uint64_t));
+    if (ids == NULL) {
+        return enif_make_badarg(env);
+    }
+
+    for(unsigned int i = 0; i < len; i++) {
+        if(!enif_get_list_cell(env, tail, &head, &tail)) {
+            enif_free((void*)ids);
+            return enif_make_badarg(env);
+        }
+
+        if(!enif_get_uint64(env, head, &ids[i])) {
+            enif_free((void*)ids);
+            return enif_make_badarg(env);
+        }
+    }
+
+    struct report* report = make_report();
+    bool result = betree_search_with_event_ids(betree, event, report, ids, len);
+
+    if (result == false) {
+        free_report(report);
+        enif_free((void*)ids);
+        return enif_make_badarg(env);
+    }
+
+    ERL_NIF_TERM matched = ids_from_report(env, report);
+    free_report(report);
+    enif_free((void*)ids);
+
+    ERL_NIF_TERM ret = enif_make_tuple2(env, atom_ok, matched);
+    clock_gettime(clock_type, &done);
+    ERL_NIF_TERM elapsed = make_time(env, &start, &done);
+
+    ErlNifTime timeslice_checkpoint = enif_monotonic_time(ERL_NIF_USEC);
+    bump_used_reductions_time_based(env,
+                                    timeslice_checkpoint - timeslice_start, yield_threshold_microseconds);
+
+    return enif_make_tuple2(env, ret, elapsed);
+}
+
 /*static ERL_NIF_TERM nif_betree_delete(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])*/
 /*{*/
     /*ERL_NIF_TERM retval;*/
@@ -2256,9 +2320,9 @@ static ErlNifFunc nif_functions[] = {
     {"search_iterator_release", 1, nif_betree_search_iterator_release, 0},
     {"search_and_cache_ids", 2, nif_search_and_cache_ids, 0},
     {"search_with_cached_ids", 3, nif_search_with_cached_ids, 0},
-
     {"search_yield", 4, nif_betree_search_yield, 0},
     {"search_next_yield", 3, nif_betree_search_next_yield, 0},
+    {"search_ids_yield", 5, nif_betree_search_ids_yield, 0},
 
     /*{"betree_delete", 2, nif_betree_delete, 0}*/
 };
