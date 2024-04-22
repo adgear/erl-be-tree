@@ -25,6 +25,11 @@
   iterated_next_output/3,
   iterated_betree_search_next/2,
 
+  with_yield/2,
+  with_yield_stats/3,
+  with_yield_output/3,
+  with_yield_betree_search/2,
+
   with_event/2,
   with_event_stats/3,
   with_event_output/3,
@@ -100,6 +105,50 @@ std_betree_search(Term, #be_evaluator{betree = Betree} = Context) ->
   end.
 
 %% 'Standard' boolean expressions evaluation section. End
+
+%% 'with yield' boolean expressions evaluation section
+
+with_yield(BetreeFile, EventsFile) ->
+  {ok, PidEval} = be_eval:start_link(),
+  Ret = be_eval:run(PidEval, "BE-Tree search event with yield",
+    BetreeFile, EventsFile,
+    fun with_yield_betree_search/2, fun stats_collector/2),
+  be_eval:stop(PidEval),
+  Ret.
+
+with_yield_stats(BetreeFile, EventsFile, StatsFile) ->
+  {ok, PidEval} = be_eval:start_link(),
+  Ret = be_eval:run(PidEval, "BE-Tree search event with yield",
+    BetreeFile,
+    EventsFile, fun with_yield_betree_search/2, _EventEvalOutputFile = undefined,
+    fun stats_collector/2, StatsFile),
+  be_eval:stop(PidEval),
+  Ret.
+
+with_yield_output(BetreeFile, EventsFile, EventEvalOutputFile) ->
+  {ok, PidEval} = be_eval:start_link(),
+  Ret = be_eval:run(PidEval, "BE-Tree search event with_yield",
+    BetreeFile,
+    EventsFile, fun with_yield_betree_search/2, EventEvalOutputFile,
+    fun stats_collector/2, undefined),
+  be_eval:stop(PidEval),
+  Ret.
+
+with_yield_betree_search(Term, #be_evaluator{betree = Betree} = Context) ->
+  Event = [list_to_tuple(
+    [event | [case N of 1 -> true; _ -> false end|| N <- Term]])],
+  {{ok, CompiledEvent}, _} = erl_betree:betree_make_event(Betree, Event),
+  BeginNano = erlang:monotonic_time(nanosecond),
+  SearchRet = erl_betree:betree_search_yield(Betree, CompiledEvent),
+  EndNano = erlang:monotonic_time(nanosecond),
+  CurrentAllocations = be_bm_utils:betree_allocations(),
+  DiffNano = EndNano - BeginNano,
+  case SearchRet of
+    {{ok, Ids}, _} -> {{ok, {Ids, {DiffNano, CurrentAllocations}}}, Context};
+    X -> {{error, {betree_search, X}}, Context}
+  end.
+
+%% 'with yield' boolean expressions evaluation section. End
 
 %% With iterator boolean expressions evaluation section
 %% Has 2 sub-sections:
