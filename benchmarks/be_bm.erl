@@ -40,6 +40,11 @@
   pipe_output/3,
   piped_betree_search/2,
 
+  pipe_with_yield/2,
+  pipe_with_yield_stats/3,
+  pipe_with_yield_output/3,
+  piped_with_yield_betree_search/2,
+
   pipe_without_compiled_event/2,
   pipe_without_compiled_event_stats/3,
   pipe_without_compiled_event_output/3,
@@ -391,6 +396,82 @@ piped_betree_search_with_made_event([Betree | Rest] = _Context, Event, Ids, Diff
   end.
 
 %% 'Piped' boolean expressions evaluation section. End
+
+%% 'Piped with yield' boolean expressions evaluation section. End
+
+pipe_with_yield(BetreeFiles, EventsFile) ->
+  {ok, PidEval} = be_eval:start_link(),
+  EventEvalFunc = fun piped_with_yield_betree_search/2,
+  EventEvalOutputFile = undefined,
+  StatsFunc = fun stats_collector/2,
+  StatsOutputFile = undefined,
+  Ret = be_eval:pipe(PidEval, "BE-Tree pipe with yield",
+    BetreeFiles,
+    EventsFile, EventEvalFunc, EventEvalOutputFile,
+    StatsFunc, StatsOutputFile),
+  be_eval:stop(PidEval),
+  Ret.
+
+pipe_with_yield_stats(BetreeFiles, EventsFile, StatsFile) ->
+  {ok, PidEval} = be_eval:start_link(),
+  EventEvalFunc = fun piped_with_yield_betree_search/2,
+  EventEvalOutputFile = undefined,
+  StatsFunc = fun stats_collector/2,
+  StatsOutputFile = StatsFile,
+  Ret = be_eval:pipe(PidEval, "BE-Tree pipe with yield",
+    BetreeFiles,
+    EventsFile, EventEvalFunc, EventEvalOutputFile,
+    StatsFunc, StatsOutputFile),
+  be_eval:stop(PidEval),
+  Ret.
+
+pipe_with_yield_output(BetreeFiles, EventsFile, OutputFile) ->
+  {ok, PidEval} = be_eval:start_link(),
+  EventEvalFunc = fun piped_with_yield_betree_search/2,
+  EventEvalOutputFile = OutputFile,
+  StatsFunc = fun stats_collector/2,
+  StatsOutputFile = undefined,
+  Ret = be_eval:pipe(PidEval, "BE-Tree pipe with yield",
+    BetreeFiles,
+    EventsFile, EventEvalFunc, EventEvalOutputFile,
+    StatsFunc, StatsOutputFile),
+  be_eval:stop(PidEval),
+  Ret.
+
+piped_with_yield_betree_search(Term, [Betree | Rest] = Context) ->
+  Event = [list_to_tuple(
+    [event | [case N of 1 -> true; _ -> false end|| N <- Term]])],
+  BeginNano = erlang:monotonic_time(nanosecond),
+  case erl_betree:betree_make_event(Betree, Event) of
+    {{ok, Evt}, _} ->
+      case erl_betree:search_yield_count(Betree, Evt) of
+        {{ok, Ids}, _, Iterations} ->
+          EndNano = erlang:monotonic_time(nanosecond),
+          DiffNano = EndNano - BeginNano,
+          case piped_with_yield_betree_search_with_made_event(Rest, Evt, Ids, DiffNano, Iterations) of
+            {ok, {Ids1, DiffNano1, Iterations1}} ->
+              CurrentAllocations = be_bm_utils:betree_allocations(),
+              {{ok, {Ids1, {DiffNano1, CurrentAllocations, Iterations1}}}, Context};
+            X -> {{error, {piped_with_yield_betree_search_with_made_event, X}}, Context}
+          end;
+        X -> {{error, {search_yield_count, X}}, Context}
+      end;
+    X -> {{error, {betree_make_event, X}}, Context}
+  end.
+
+piped_with_yield_betree_search_with_made_event([] = _Context, _Event, Ids, DiffNano, Iterations) ->
+  {ok, {Ids, DiffNano, Iterations}};
+piped_with_yield_betree_search_with_made_event([Betree | Rest] = _Context, Event, Ids, DiffNano, Iterations) ->
+  BeginNano = erlang:monotonic_time(nanosecond),
+  case erl_betree:betree_search_ids_yield(Betree, Event, Ids) of
+    {{ok, Ids1}, _} ->
+      EndNano = erlang:monotonic_time(nanosecond),
+      DiffNano1 = EndNano - BeginNano,
+      piped_with_yield_betree_search_with_made_event(Rest, Event, Ids1, DiffNano + DiffNano1, Iterations+1);
+    X -> {error, {betree_search_ids_yield, X}}
+  end.
+
+%% 'Piped with yield' boolean expressions evaluation section. End
 
 %% 'Piped without compiled event' boolean expressions evaluation section
 
