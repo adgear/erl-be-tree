@@ -2089,8 +2089,12 @@ static ERL_NIF_TERM nif_betree_search_yield(ErlNifEnv* env, int argc, const ERL_
         ERL_NIF_TERM matched = enif_make_list_from_array(env, tmp, 0);
         clock_gettime(clock_type, &done);
         ERL_NIF_TERM elapsed = make_time(env, &start, &done);
-
         ERL_NIF_TERM ret = enif_make_tuple2(env, atom_ok, matched);
+
+        ErlNifTime timeslice_checkpoint = enif_monotonic_time(ERL_NIF_USEC);
+        bump_used_reductions_time_based(env,
+                                        timeslice_checkpoint - timeslice_start, yield_threshold_microseconds);
+
         return enif_make_tuple2(env, ret, elapsed);
     }
 
