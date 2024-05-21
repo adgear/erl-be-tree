@@ -338,7 +338,7 @@ observer> Module = tracer123.
 ```
 Set directory where the module is located:
 ```erlang
-observer> Dir = "/app".
+observer> Dir = ".".
 ```
 Load the module into the `gateway` node:
 ```erlang
