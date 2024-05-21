@@ -1,7 +1,7 @@
 # FAQ - How to trace functions in remote Erlang node
 
 Created based on
-- [erlang:trace/3](https://www.erlang.org/doc/man/erlang#trace-3), [erlang:trace_pattern/3](https://www.erlang.org/doc/man/erlang#trace_pattern-3);
+- [erlang:trace/3](https://www.erlang.org/doc/apps/erts/erlang.html#trace/3), [erlang:trace_pattern/3](https://www.erlang.org/doc/apps/erts/erlang.html#trace_pattern/3);
 - and [recon_trace.erl](https://github.com/ferd/recon/blob/master/src/recon_trace.erl) source code.
 
 As an example, demonstrates how to collect `boolean expressions` events using `erlang:trace/3` and `erlang:trace_pattern/3`.
@@ -252,6 +252,26 @@ Now, the check will indicate that the module is not loaded:
 ```erlang
 > spawn(RemoteNode, fun() -> io:format("~p~n", [code:is_loaded(Module)]) end).
 false
+```
+
+### 1.6. Exit Erlang shells and kubernetes pod.
+
+To exit EShell:
+```erlang
+(rem-9240-gateway@gateway-use1-dsp-prod-us-east-1b-6bc94d45b8-9mjkz)>
+```
+press `Ctrl+G`
+```erlang
+-->
+```
+and type in `q`<Enter> to exit Eshells:
+```erlang
+--> q
+```
+then `exit`<Enter> to exit kubernetes pod:
+```bash
+$ exit
+<your-local-prompt> $
 ```
 
 ## 2. Tracing functions in an Erlang node running on a local machine
