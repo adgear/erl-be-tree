@@ -1,12 +1,19 @@
 # FAQ - How to trace functions in remote Erlang node
 
+Created based on
+- [erlang:trace/3](https://www.erlang.org/doc/man/erlang#trace-3), [erlang:trace_pattern/3](https://www.erlang.org/doc/man/erlang#trace_pattern-3);
+- and [recon_trace.erl](https://github.com/ferd/recon/blob/master/src/recon_trace.erl) source code.
+
+As an example, demonstrates how to collect `boolean expressions` events using `erlang:trace/3` and `erlang:trace_pattern/3`.
+
 ## 1. Tracing functions in an `rtb-gateway` running in a kubernetes pod
 
 ### 1.1. Setup for tracing `rtb-gateway` in kubernetes pod
 
 On your local machine create directory `trace`.
 
-Copy file `trace123.erl` into the directory `trace`.
+Copy file [trace123.erl](https://github.com/adgear/erl-be-tree/blob/benchmark/trace/tracer123.erl)
+ into the directory `trace`.
 
 Make directory `trace` the current directory.
 
@@ -102,7 +109,7 @@ If the response is
 ```
 then it is safe to remove the previous version of the `tracer123` module.
 
-How to do that, see "Clean up" section below.
+How to do that, see [Section 1.5.](https://github.com/adgear/erl-be-tree/blob/benchmark/trace/FAQ_How_to_trace_functions_in_remote_Erlang_node.md#15-remove-tracer123-module-from-the-remote-ie-gateway-node) below.
 
 Then, repeat load the module into the `gateway` node:
 ```erlang
@@ -249,15 +256,17 @@ false
 
 ## 2. Tracing functions in an Erlang node running on a local machine
 
-This section is to practice what is described in `1.` on a local machine.
+This section is to practice what is described in [Section 1.](https://github.com/adgear/erl-be-tree/blob/benchmark/trace/FAQ_How_to_trace_functions_in_remote_Erlang_node.md#1-tracing-functions-in-an-rtb-gateway-running-in-a-kubernetes-pod) on a local machine.
 
 ### 2.1. Setup with an `rtb-gateway` function running on a node on a local machine
 
 On your local machine create directory `trace`.
 
-Copy file `trace123.erl` into the directory `trace`.
+Copy file [trace123.erl](https://github.com/adgear/erl-be-tree/blob/benchmark/trace/tracer123.erl)
+into the directory `trace`.
 
-Copy mock version of `erl_betree.erl` from the `erl-be-tree/trace` into the directory `trace`.
+Copy mock version of [erl_betree.erl](https://github.com/adgear/erl-be-tree/blob/benchmark/trace/erl_betree.erl) from the `erl-be-tree/trace`
+into the directory `trace`.
 
 Make directory `trace` the current directory.
 
@@ -382,4 +391,4 @@ observer> Events.
 
 #### 2.4.2. Tracing on the `remote` node with the limit on the duration for how long the trace is active.
 
-Similar to the Section 1.4.2.
+Similar to the [Section 1.4.2.](https://github.com/adgear/erl-be-tree/blob/benchmark/trace/FAQ_How_to_trace_functions_in_remote_Erlang_node.md#142-tracing-on-the-remote-node-with-the-limit-on-the-duration-for-how-long-the-trace-is-active)
