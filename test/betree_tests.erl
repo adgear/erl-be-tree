@@ -539,7 +539,7 @@ valid_set_left_integer_test() ->
     ok.
 
 valid_set_left_string_test() ->
-    Expr = <<"\"value\" in var""">>,
+    Expr = <<"\"value\" in var">>,
     ok = run_valid(int, true, Expr, invalid),
     ok = run_valid(float, true, Expr, invalid),
     ok = run_valid(bool, true, Expr, invalid),
