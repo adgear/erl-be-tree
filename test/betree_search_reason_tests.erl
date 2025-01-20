@@ -525,3 +525,40 @@ not_or_test() ->
   ?assert(is_list(Ids2)),
   ?assertEqual([Id1, Id2, Id4], lists:sort(Ids)),
   ?assertEqual([{p1, [Id3]}, {p3, [Id5]}], lists:sort(Ids2)).
+
+atom_event_search_reason_test() ->
+    Domains = [[
+                {b, bool, disallow_undefined}, 
+                {i, int, disallow_undefined}, 
+                {f, float, disallow_undefined}, 
+                {s, bin, disallow_undefined}
+               ]],
+    Expr1 = <<"b and i = 10 and f < 3.13 and s = \"good\"">>,
+    Expr2 = <<"b and i = 10 and f > 3.13 and s = \"bad\"">>,
+    Expr3 = <<"b and i = 10 and f < 3.13 and s = \"good\"">>,
+    Expr4 = <<"not b and i = 11 and f > 3.13 and s = \"bad\"">>,
+    Expr5 = <<"not b and i = 11 and f < 3.13 and s = \"good\"">>,
+    Expr6 = <<"not b and i = 11 and f > 3.13 and s = \"bad\"">>,
+    Expr7 = <<"not b and i = 11 and f < 3.13 and s = \"good\"">>,
+    Event = [#all{
+               b = true,
+               i = 10,
+               f = 3.14,
+               s = <<"cool">>
+              }],
+    {ok, Betree} = erl_betree:betree_make_err(Domains),
+    lists:foldl(
+      fun(Expr, Num) -> 
+              {ok, Sub} = erl_betree:betree_make_sub_err(Betree, Num, [], Expr), 
+              ok = erl_betree:betree_insert_sub_err(Betree, Sub), 
+              Num + 1
+      end, 
+      1,
+      [Expr1, Expr2, Expr3, Expr4, Expr5, Expr6, Expr7]
+    ),
+    ok = erl_betree:betree_make_sub_ids(Betree),
+    {Res, _} = erl_betree:betree_search_err(Betree, Event, 0),
+    ?assertEqual({ok, [], [{b,[4,5,6,7]},{s,[1,2,3]}]}, Res),
+    ok.
+
+
