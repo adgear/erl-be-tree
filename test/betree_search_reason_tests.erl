@@ -464,7 +464,7 @@ not_and_test() ->
   ?assertMatch({ok, _, _}, Ret),
   {ok, Ids, NonMatches} = Ret,
   ?assertEqual([Id2, Id4], lists:sort(Ids)),
-  ?assertEqual([{p1,[101]},{p3,[303]}], NonMatches).
+  ?assertEqual([{p1,[101]},{p3,[303]}], lists:sort(NonMatches)).
 
 not_or_test() ->
   Params = [
@@ -557,8 +557,8 @@ atom_event_search_reason_test() ->
       [Expr1, Expr2, Expr3, Expr4, Expr5, Expr6, Expr7]
     ),
     ok = erl_betree:betree_make_sub_ids(Betree),
-    {Res, _} = erl_betree:betree_search_err(Betree, Event, 0),
-    ?assertEqual({ok, [], [{b,[4,5,6,7]},{s,[1,2,3]}]}, Res),
+    {{ok, [], Res}, _} = erl_betree:betree_search_err(Betree, Event, 0),
+    ?assertEqual([{b,[4,5,6,7]},{s,[1,2,3]}], lists:sort(Res)),
     ok.
 
 
