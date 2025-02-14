@@ -560,5 +560,3 @@ atom_event_search_reason_test() ->
     {{ok, [], Res}, _} = erl_betree:betree_search_err(Betree, Event, 0),
     ?assertEqual([{b,[4,5,6,7]},{s,[1,2,3]}], lists:sort(Res)),
     ok.
-
-
