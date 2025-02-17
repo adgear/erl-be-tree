@@ -2163,7 +2163,8 @@ static ERL_NIF_TERM nif_betree_search_ids_yield(ErlNifEnv *env, int argc,
 /*
  * betree search error reason code begin
  */
-static struct betree *get_betree_err(ErlNifEnv *env, const ERL_NIF_TERM term) {
+static struct betree_err *get_betree_err(ErlNifEnv *env,
+                                         const ERL_NIF_TERM term) {
   struct betree_err *betree = NULL;
   enif_get_resource(env, term, MEM_BETREE, (void *)&betree);
   return betree;
@@ -2444,7 +2445,7 @@ static ERL_NIF_TERM nif_betree_make_event_err(ErlNifEnv *env, int argc,
     retval = enif_make_badarg(env);
     goto cleanup;
   }
-  evt->event = event = betree_make_event(betree);
+  evt->event = event = betree_make_event_err(betree);
   ERL_NIF_TERM erl_event = enif_make_resource(env, evt);
 
   ERL_NIF_TERM head;
@@ -2897,7 +2898,7 @@ static ERL_NIF_TERM nif_betree_search_ids_err(ErlNifEnv *env, int argc,
       goto cleanup;
     }
 
-    if (!add_variables(env, betree, event, tuple, tuple_len, pred_index)) {
+    if (!add_variables_err(env, betree, event, tuple, tuple_len, pred_index)) {
       retval = enif_make_badarg(env);
       goto cleanup;
     }
