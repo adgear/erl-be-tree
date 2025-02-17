@@ -16,7 +16,6 @@
 #include "betree.h"
 #include "betree_err.h"
 #include "debug.h"
-#include "hashtable.h"
 
 // return values
 static ERL_NIF_TERM atom_ok;
@@ -1595,15 +1594,10 @@ static ERL_NIF_TERM ids_from_report_err(ErlNifEnv *env,
 
 static ERL_NIF_TERM reasons_from_report_err(ErlNifEnv *env,
                                             const struct report_err *report) {
-#if defined(USE_REASONLIST)
   struct reasonlist *reasons = report->reason_sub_id_list;
   struct reason_map *reason_map = report->reason_map;
-#else
-  hashtable *reasons = report->reason_sub_id_list;
-#endif
   ERL_NIF_TERM res = enif_make_list(env, 0);
   size_t res_size = reasons->size;
-#if defined(USE_REASONLIST)
   for (size_t idx = 0; idx < reasons->size && res_size > 0; idx++) {
     size_t sz = reasons->body[idx]->size;
     if (sz > 0) {
@@ -1622,40 +1616,12 @@ static ERL_NIF_TERM reasons_from_report_err(ErlNifEnv *env,
             enif_make_list_cell(env, enif_make_uint64(env, ids[i]), sub_res);
       }
       enif_free((void *)ids);
-      ERL_NIF_TERM res_single_key_list =
-          enif_make_tuple2(env, enif_make_atom(env, reason_map->reason[idx]), sub_res);
+      ERL_NIF_TERM res_single_key_list = enif_make_tuple2(
+          env, enif_make_atom(env, reason_map->reason[idx]), sub_res);
       res = enif_make_list_cell(env, res_single_key_list, res);
       res_size--;
     }
   }
-#else
-  for (size_t idx = 0; idx < reasons->capacity && res_size > 0; idx++) {
-    if (reasons->body[idx].key && reasons->body[idx].value) {
-      size_t sz = ((arraylist *)(reasons->body[idx].value))->size;
-      if (sz > 0) {
-        ERL_NIF_TERM sub_res = enif_make_list(env, 0);
-        uint64_t *ids = enif_alloc(sz * sizeof(uint64_t));
-        if (ids == NULL)
-          continue;
-        for (size_t i = sz; i;) {
-          i--;
-          ids[i] = ((arraylist *)(reasons->body[idx].value))->body[i];
-        }
-        qsort(ids, sz, sizeof(uint64_t), cmpfunc);
-        for (size_t i = sz; i;) {
-          i--;
-          sub_res =
-              enif_make_list_cell(env, enif_make_uint64(env, ids[i]), sub_res);
-        }
-        enif_free((void *)ids);
-        ERL_NIF_TERM res_single_key_list = enif_make_tuple2(
-            env, enif_make_atom(env, reasons->body[idx].key), sub_res);
-        res = enif_make_list_cell(env, res_single_key_list, res);
-        res_size--;
-      }
-    }
-  }
-#endif
   return res;
 }
 
@@ -2708,11 +2674,7 @@ static ERL_NIF_TERM nif_betree_search_err(ErlNifEnv *env, int argc,
     pred_index += (tuple_len - 1);
   }
 
-#if defined(USE_REASONLIST)
   report = make_report_err(betree);
-#else
-  report = make_report_err();
-#endif
   bool result = betree_search_with_event_err(betree, event, report);
 
   ERL_NIF_TERM ret = (result) ? atom_ok : atom_error;
@@ -2784,11 +2746,7 @@ static ERL_NIF_TERM nif_betree_search_evt_err(ErlNifEnv *env, int argc,
   }
   struct betree_event *event = evt->event;
 
-#if defined(USE_REASONLIST)
   report = make_report_err(betree);
-#else
-  report = make_report_err();
-#endif
   bool result = betree_search_with_event_err(betree, event, report);
 
   ERL_NIF_TERM ret = (result) ? atom_ok : atom_error;
@@ -2859,11 +2817,7 @@ static ERL_NIF_TERM nif_betree_search_evt_ids_err(ErlNifEnv *env, int argc,
     }
   }
 
-#if defined(USE_REASONLIST)
   report = make_report_err(betree);
-#else
-  report = make_report_err();
-#endif
   bool result =
       betree_search_with_event_ids_err(betree, event, report, ids, sz);
 
@@ -2965,11 +2919,7 @@ static ERL_NIF_TERM nif_betree_search_ids_err(ErlNifEnv *env, int argc,
     }
   }
 
-#if defined(USE_REASONLIST)
   report = make_report_err(betree);
-#else
-  report = make_report_err();
-#endif
   bool result =
       betree_search_with_event_ids_err(betree, event, report, ids, sz);
 
