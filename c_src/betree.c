@@ -54,10 +54,12 @@ static ERL_NIF_TERM atom_undefined;
 static ERL_NIF_TERM atom_unknown;
 
 static ErlNifResourceType *MEM_BETREE;
+static ErlNifResourceType *MEM_BETREE_ERR;
 static ErlNifResourceType *MEM_SUB;
 static ErlNifResourceType *MEM_EVENT;
 static ErlNifResourceType *MEM_SEARCH_ITERATOR;
 static ErlNifResourceType *MEM_SEARCH_STATE;
+static ErlNifResourceType *MEM_BETREE_REASON;
 
 struct sub {
   const struct betree_sub *sub;
@@ -252,6 +254,12 @@ static void cleanup_betree(ErlNifEnv *env, void *obj) {
   betree_deinit(betree);
 }
 
+static void cleanup_betree_err(ErlNifEnv *env, void *obj) {
+  (void)env;
+  struct betree_err *betree = obj;
+  betree_deinit_err(betree);
+}
+
 static void cleanup_event(ErlNifEnv *env, void *obj) {
   (void)env;
   struct evt *evt = obj;
@@ -313,6 +321,11 @@ static int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info) {
   MEM_BETREE =
       enif_open_resource_type(env, NULL, "betree", cleanup_betree, flags, NULL);
   if (MEM_BETREE == NULL) {
+    return -1;
+  }
+  MEM_BETREE_ERR = enif_open_resource_type(env, NULL, "betree_err",
+                                           cleanup_betree_err, flags, NULL);
+  if (MEM_BETREE_ERR == NULL) {
     return -1;
   }
   // We don't own the betree_sub, betree will deinit it. No dtor
@@ -1594,12 +1607,11 @@ static ERL_NIF_TERM ids_from_report_err(ErlNifEnv *env,
 
 static ERL_NIF_TERM reasons_from_report_err(ErlNifEnv *env,
                                             const struct report_err *report) {
-  struct reasonlist *reasons = report->reason_sub_id_list;
-  struct reason_map *reason_map = report->reason_map;
+  struct betree_reason_map_t *reasons = report->reason_sub_id_list;
   ERL_NIF_TERM res = enif_make_list(env, 0);
   size_t res_size = reasons->size;
-  for (size_t idx = 0; idx < reasons->size && res_size > 0; idx++) {
-    size_t sz = reasons->body[idx]->size;
+  for (size_t idx = 0; idx < res_size; idx++) {
+    size_t sz = reasons->reasons[idx]->list->size;
     if (sz > 0) {
       ERL_NIF_TERM sub_res = enif_make_list(env, 0);
       uint64_t *ids = enif_alloc(sz * sizeof(uint64_t));
@@ -1607,7 +1619,7 @@ static ERL_NIF_TERM reasons_from_report_err(ErlNifEnv *env,
         continue;
       for (size_t i = sz; i;) {
         i--;
-        ids[i] = reasons->body[idx]->body[i];
+        ids[i] = reasons->reasons[idx]->list->body[i];
       }
       qsort(ids, sz, sizeof(uint64_t), cmpfunc);
       for (size_t i = sz; i;) {
@@ -1617,9 +1629,8 @@ static ERL_NIF_TERM reasons_from_report_err(ErlNifEnv *env,
       }
       enif_free((void *)ids);
       ERL_NIF_TERM res_single_key_list = enif_make_tuple2(
-          env, enif_make_atom(env, reason_map->reason[idx]), sub_res);
+          env, enif_make_atom(env, reasons->reasons[idx]->name), sub_res);
       res = enif_make_list_cell(env, res_single_key_list, res);
-      res_size--;
     }
   }
   return res;
@@ -2166,7 +2177,7 @@ static ERL_NIF_TERM nif_betree_search_ids_yield(ErlNifEnv *env, int argc,
 static struct betree_err *get_betree_err(ErlNifEnv *env,
                                          const ERL_NIF_TERM term) {
   struct betree_err *betree = NULL;
-  enif_get_resource(env, term, MEM_BETREE, (void *)&betree);
+  enif_get_resource(env, term, MEM_BETREE_ERR, (void *)&betree);
   return betree;
 }
 
@@ -2371,7 +2382,8 @@ static ERL_NIF_TERM nif_betree_make_err(ErlNifEnv *env, int argc,
     goto cleanup;
   }
 
-  struct betree_err *betree = enif_alloc_resource(MEM_BETREE, sizeof(*betree));
+  struct betree_err *betree =
+      enif_alloc_resource(MEM_BETREE_ERR, sizeof(*betree));
   betree_init_err(betree);
 
   ERL_NIF_TERM term = enif_make_resource(env, betree);

@@ -253,7 +253,7 @@ atom_ids_search_term_test() ->
       ok = erl_betree:betree_insert_sub_err(Betree, Sub3),
       ok = erl_betree:betree_make_sub_ids(Betree),
 
-      {{ok, Evt}, _} = erl_betree:betree_make_event(Betree, Event),
+      {{ok, Evt}, _} = erl_betree:betree_make_event_err(Betree, Event),
 
       {Res0, _} = erl_betree:betree_search_err(Betree, Evt, 0),
       ?assertEqual({ok, [1,2], [{s,[3]}]}, Res0),
@@ -276,7 +276,7 @@ two_betrees_test() ->
   ok = erl_betree:betree_make_sub_ids(Betree2),
 
   Event = [{bool_event, false, true}],
-  Ret_betree_make_event = erl_betree:betree_make_event(Betree1, Event),
+  Ret_betree_make_event = erl_betree:betree_make_event_err(Betree1, Event),
   ?assertMatch({{ok, _}, _}, Ret_betree_make_event),
   {{ok, Evt}, _} = Ret_betree_make_event,
 
