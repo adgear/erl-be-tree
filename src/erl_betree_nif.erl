@@ -39,6 +39,7 @@
     betree_search_evt_err/3,
     betree_search_evt_err/4,
     betree_search_ids_err/4,
+    betree_parse_reasons/1,
     betree_write_dot_err/2
 ]).
 
@@ -125,6 +126,9 @@ betree_search_evt_err(_Betree, _Event, _ClockType) ->
 betree_search_evt_err(_Betree, _Event, _Ids, _ClockType) ->
     ?nif_stub.
 betree_search_ids_err(_Betree, _Event, _Ids, _ClockType) ->
+    ?nif_stub.
+
+betree_parse_reasons(_NonMatches) ->
     ?nif_stub.
 
 betree_write_dot_err(_Betree, _FileName) ->

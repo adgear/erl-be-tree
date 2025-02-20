@@ -12,10 +12,13 @@
 // and/or crashes.
 #define NIF true
 
+#define USE_RESOURCE_FOR_REPORT_REASON
+
 #include "arraylist.h"
 #include "betree.h"
 #include "betree_err.h"
 #include "debug.h"
+#include "debug_err.h"
 
 // return values
 static ERL_NIF_TERM atom_ok;
@@ -69,12 +72,14 @@ struct evt {
   struct betree_event *event;
 };
 
+struct rsn {
+  struct betree_reason_map_t *reason;
+};
+
 static ERL_NIF_TERM ids_from_report(ErlNifEnv *env,
                                     const struct report *report);
 static ERL_NIF_TERM ids_from_report_err(ErlNifEnv *env,
                                         const struct report_err *report);
-static ERL_NIF_TERM reasons_from_report_err(ErlNifEnv *env,
-                                            const struct report_err *report);
 static ERL_NIF_TERM make_time(ErlNifEnv *env, const struct timespec *start,
                               const struct timespec *done);
 
@@ -267,6 +272,13 @@ static void cleanup_event(ErlNifEnv *env, void *obj) {
   evt->event = NULL;
 }
 
+static void cleanup_report_reason(ErlNifEnv *env, void *obj) {
+  (void)env;
+  struct rsn *rsn = obj;
+  betree_reason_map_destroy(rsn->reason);
+  rsn->reason = NULL;
+}
+
 static void cleanup_search_iterator(ErlNifEnv *env, void *obj) {
   (void)env;
   struct search_iterator *search_iterator = obj;
@@ -348,6 +360,11 @@ static int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info) {
   if (MEM_SEARCH_STATE == NULL) {
     return -1;
   }
+  MEM_BETREE_REASON = enif_open_resource_type(
+      env, NULL, "betree_reason", cleanup_report_reason, flags, NULL);
+  if (MEM_BETREE_REASON == NULL) {
+    return -1;
+  }
 
   return 0;
 }
@@ -382,6 +399,13 @@ static struct sub *get_sub(ErlNifEnv *env, const ERL_NIF_TERM term) {
   struct sub *sub = NULL;
   enif_get_resource(env, term, MEM_SUB, (void *)&sub);
   return sub;
+}
+
+static struct betree_reason_map_t *get_reason(ErlNifEnv *env,
+                                              const ERL_NIF_TERM term) {
+  struct rsn *rsn = NULL;
+  enif_get_resource(env, term, MEM_BETREE_REASON, (void *)&rsn);
+  return rsn->reason;
 }
 
 static char *alloc_string(ErlNifBinary bin) {
@@ -1605,9 +1629,22 @@ static ERL_NIF_TERM ids_from_report_err(ErlNifEnv *env,
   return res;
 }
 
-static ERL_NIF_TERM reasons_from_report_err(ErlNifEnv *env,
-                                            const struct report_err *report) {
-  struct betree_reason_map_t *reasons = report->reason_sub_id_list;
+static ERL_NIF_TERM nif_betree_parse_reasons(ErlNifEnv *env, int argc,
+                                             const ERL_NIF_TERM argv[]) {
+  ERL_NIF_TERM retval;
+  struct betree_reason_map_t *reasons = NULL;
+
+  if (argc != 1) {
+    retval = enif_make_badarg(env);
+    goto cleanup;
+  }
+
+  reasons = get_reason(env, argv[0]);
+  if (reasons == NULL) {
+    retval = enif_make_badarg(env);
+    goto cleanup;
+  }
+
   ERL_NIF_TERM res = enif_make_list(env, 0);
   size_t res_size = reasons->size;
   for (size_t idx = 0; idx < res_size; idx++) {
@@ -1619,7 +1656,7 @@ static ERL_NIF_TERM reasons_from_report_err(ErlNifEnv *env,
         continue;
       for (size_t i = sz; i;) {
         i--;
-        ids[i] = reasons->reasons[idx]->list->body[i];
+        ids[i] = (uint64_t)reasons->reasons[idx]->list->body[i];
       }
       qsort(ids, sz, sizeof(uint64_t), cmpfunc);
       for (size_t i = sz; i;) {
@@ -1633,7 +1670,10 @@ static ERL_NIF_TERM reasons_from_report_err(ErlNifEnv *env,
       res = enif_make_list_cell(env, res_single_key_list, res);
     }
   }
-  return res;
+
+  retval = enif_make_tuple2(env, atom_ok, res);
+cleanup:
+  return retval;
 }
 
 static void bump_used_reductions(ErlNifEnv *env, int count) {
@@ -2692,7 +2732,18 @@ static ERL_NIF_TERM nif_betree_search_err(ErlNifEnv *env, int argc,
 
   ERL_NIF_TERM ret = (result) ? atom_ok : atom_error;
   ERL_NIF_TERM res = ids_from_report_err(env, report);
+#if defined(USE_RESOURCE_FOR_REPORT_REASON)
+  struct rsn *rsn = enif_alloc_resource(MEM_BETREE_REASON, sizeof(*rsn));
+  if (rsn == NULL) {
+    retval = enif_make_badarg(env);
+    goto cleanup;
+  }
+  rsn->reason = report->reason_sub_id_list;
+  ERL_NIF_TERM res_reason = enif_make_resource(env, rsn);
+  enif_release_resource(rsn);
+#else
   ERL_NIF_TERM res_reason = reasons_from_report_err(env, report);
+#endif
 
   retval = enif_make_tuple3(env, ret, res, res_reason);
 cleanup:
@@ -2764,7 +2815,18 @@ static ERL_NIF_TERM nif_betree_search_evt_err(ErlNifEnv *env, int argc,
 
   ERL_NIF_TERM ret = (result) ? atom_ok : atom_error;
   ERL_NIF_TERM res = ids_from_report_err(env, report);
+#if defined(USE_RESOURCE_FOR_REPORT_REASON)
+  struct rsn *rsn = enif_alloc_resource(MEM_BETREE_REASON, sizeof(*rsn));
+  if (rsn == NULL) {
+    retval = enif_make_badarg(env);
+    goto cleanup;
+  }
+  rsn->reason = report->reason_sub_id_list;
+  ERL_NIF_TERM res_reason = enif_make_resource(env, rsn);
+  enif_release_resource(rsn);
+#else
   ERL_NIF_TERM res_reason = reasons_from_report_err(env, report);
+#endif
 
   retval = enif_make_tuple3(env, ret, res, res_reason);
 cleanup:
@@ -2836,7 +2898,18 @@ static ERL_NIF_TERM nif_betree_search_evt_ids_err(ErlNifEnv *env, int argc,
 
   ERL_NIF_TERM ret = (result) ? atom_ok : atom_error;
   ERL_NIF_TERM res = ids_from_report_err(env, report);
+#if defined(USE_RESOURCE_FOR_REPORT_REASON)
+  struct rsn *rsn = enif_alloc_resource(MEM_BETREE_REASON, sizeof(*rsn));
+  if (rsn == NULL) {
+    retval = enif_make_badarg(env);
+    goto cleanup;
+  }
+  rsn->reason = report->reason_sub_id_list;
+  ERL_NIF_TERM res_reason = enif_make_resource(env, rsn);
+  enif_release_resource(rsn);
+#else
   ERL_NIF_TERM res_reason = reasons_from_report_err(env, report);
+#endif
 
   retval = enif_make_tuple3(env, ret, res, res_reason);
 cleanup:
@@ -2938,7 +3011,18 @@ static ERL_NIF_TERM nif_betree_search_ids_err(ErlNifEnv *env, int argc,
 
   ERL_NIF_TERM ret = (result) ? atom_ok : atom_error;
   ERL_NIF_TERM res = ids_from_report_err(env, report);
+#if defined(USE_RESOURCE_FOR_REPORT_REASON)
+  struct rsn *rsn = enif_alloc_resource(MEM_BETREE_REASON, sizeof(*rsn));
+  if (rsn == NULL) {
+    retval = enif_make_badarg(env);
+    goto cleanup;
+  }
+  rsn->reason = report->reason_sub_id_list;
+  ERL_NIF_TERM res_reason = enif_make_resource(env, rsn);
+  enif_release_resource(rsn);
+#else
   ERL_NIF_TERM res_reason = reasons_from_report_err(env, report);
+#endif
 
   retval = enif_make_tuple3(env, ret, res, res_reason);
 cleanup:
@@ -3008,6 +3092,7 @@ static ErlNifFunc nif_functions[] = {
     {"betree_search_evt_err", 3, nif_betree_search_evt_err, 0},
     {"betree_search_evt_err", 4, nif_betree_search_evt_ids_err, 0},
     {"betree_search_ids_err", 4, nif_betree_search_ids_err, 0},
+    {"betree_parse_reasons", 1, nif_betree_parse_reasons, 0},
     {"betree_write_dot_err", 2, betree_write_dot_err, ERL_DIRTY_JOB_IO_BOUND},
 };
 
