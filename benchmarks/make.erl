@@ -17,7 +17,9 @@ all() ->
     "benchmarks/be_loader.erl",
     "benchmarks/be_eval.erl",
     "benchmarks/be_bm_utils.erl",
-    "benchmarks/be_bm.erl"
+    "benchmarks/be_bm.erl",
+    "benchmarks_err/be_loader_err.erl",
+    "benchmarks_err/be_eval_err.erl"
   ],
   compile(Files, []).
 
