@@ -18,8 +18,8 @@ all() ->
     "benchmarks/be_eval.erl",
     "benchmarks/be_bm_utils.erl",
     "benchmarks/be_bm.erl",
-    "benchmarks_err/be_loader_err.erl",
-    "benchmarks_err/be_eval_err.erl"
+    "benchmarks/be_loader_err.erl",
+    "benchmarks/be_eval_err.erl"
   ],
   compile(Files, []).
 
