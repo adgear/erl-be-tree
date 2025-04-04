@@ -14,7 +14,7 @@
 
 #define USE_RESOURCE_FOR_REPORT_REASON
 
-#include "arraylist.h"
+#include "dyn_arr.h"
 #include "betree.h"
 #include "betree_err.h"
 #include "debug.h"
@@ -1656,7 +1656,7 @@ static ERL_NIF_TERM nif_betree_parse_reasons(ErlNifEnv *env, int argc,
         continue;
       for (size_t i = sz; i;) {
         i--;
-        ids[i] = (uint64_t)reasons->reasons[idx]->list->body[i];
+        ids[i] = (uint64_t)reasons->reasons[idx]->list->data[i];
       }
       qsort(ids, sz, sizeof(uint64_t), cmpfunc);
       for (size_t i = sz; i;) {
