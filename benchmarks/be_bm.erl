@@ -26,6 +26,16 @@
   std_betree_search/2,
   iterated_betree_search_all/2,
   iterated_betree_search_next/2,
+
+  std_err/2,
+  std_stats_err/3,
+  std_output_err/3,
+  with_event_err/2,
+  with_event_stats_err/3,
+  with_event_output_err/3,
+
+  std_betree_search_err/2,
+
   stats_collector/2,
 
   % compare evaluation outputs
@@ -209,6 +219,89 @@ with_event_betree_search(Term, #be_evaluator{betree = Betree} = Context) ->
         X -> {{error, {betree_search_with_event, X}}, Context}
       end;
     X -> {{error, {betree_make_event, X}}, Context}
+  end.
+
+std_err(BetreeFile, EventsFile) ->
+  {ok, PidEval} = be_eval_err:start_link(),
+  Ret = be_eval_err:run(PidEval, "BE-Tree search reason event",
+    BetreeFile, EventsFile,
+    fun std_betree_search_err/2, fun stats_collector/2),
+  be_eval_err:stop(PidEval),
+  Ret.
+
+
+std_stats_err(BetreeFile, EventsFile, StatsFile) ->
+  {ok, PidEval} = be_eval_err:start_link(),
+  Ret = be_eval_err:run(PidEval, "BE-Tree search reason event",
+    BetreeFile,
+    EventsFile, fun std_betree_search_err/2, _EventEvalOutputFile = undefined,
+    fun stats_collector/2, StatsFile),
+  be_eval_err:stop(PidEval),
+  Ret.
+
+std_output_err(BetreeFile, EventsFile, EventEvalOutputFile) ->
+  {ok, PidEval} = be_eval_err:start_link(),
+  Ret = be_eval_err:run(PidEval, "BE-Tree search reason event",
+    BetreeFile,
+    EventsFile, fun std_betree_search_err/2, EventEvalOutputFile,
+    fun stats_collector/2, undefined),
+  be_eval_err:stop(PidEval),
+  Ret.
+
+with_event_err(BetreeFile, EventsFile) ->
+  {ok, PidEval} = be_eval_err:start_link(),
+  Ret = be_eval_err:run(PidEval, "BE-Tree search reason 'with event'",
+    BetreeFile, EventsFile,
+    fun with_event_betree_search_err/2, fun stats_collector/2),
+  be_eval_err:stop(PidEval),
+  Ret.
+
+with_event_stats_err(BetreeFile, EventsFile, StatsFile) ->
+  {ok, PidEval} = be_eval_err:start_link(),
+  Ret = be_eval_err:run(PidEval, "BE-Tree search reason 'with event'",
+    BetreeFile,
+    EventsFile, fun with_event_betree_search_err/2, _EventEvalOutputFile = undefined,
+    fun stats_collector/2, StatsFile),
+  be_eval_err:stop(PidEval),
+  Ret.
+
+with_event_output_err(BetreeFile, EventsFile, EventEvalOutputFile) ->
+  {ok, PidEval} = be_eval_err:start_link(),
+  Ret = be_eval_err:run(PidEval, "BE-Tree search reason 'with event'",
+    BetreeFile,
+    EventsFile, fun with_event_betree_search_err/2, EventEvalOutputFile,
+    fun stats_collector/2, undefined),
+  be_eval_err:stop(PidEval),
+  Ret.
+
+with_event_betree_search_err(Term, #be_evaluator{betree = Betree} = Context) ->
+  Event = [list_to_tuple(
+    [event | [case N of 1 -> true; _ -> false end|| N <- Term]])],
+  BeginNano = erlang:monotonic_time(nanosecond),
+  case erl_betree:betree_make_event_err(Betree, Event) of
+    {{ok, Evt}, _} ->
+      case erl_betree:betree_search_err(Betree, Evt, 0) of
+        {{ok, Ids, NonMatches}, _} ->
+          EndNano = erlang:monotonic_time(nanosecond),
+          CurrentAllocations = be_bm_utils:betree_allocations(),
+          DiffNano = EndNano - BeginNano,
+          {{ok, {{Ids, NonMatches}, {DiffNano, CurrentAllocations}}}, Context};
+        X -> {{error, {betree_search_with_event, X}}, Context}
+      end;
+    X -> {{error, {betree_make_event, X}}, Context}
+  end.
+
+std_betree_search_err(Term, #be_evaluator{betree = Betree} = Context) ->
+  Event = [list_to_tuple(
+    [event | [case N of 1 -> true; _ -> false end|| N <- Term]])],
+  BeginNano = erlang:monotonic_time(nanosecond),
+  SearchRet = erl_betree:betree_search_err(Betree, Event),
+  EndNano = erlang:monotonic_time(nanosecond),
+  CurrentAllocations = be_bm_utils:betree_allocations(),
+  DiffNano = EndNano - BeginNano,
+  case SearchRet of
+    {ok, Ids, NonMatches} -> {{ok, {{Ids,NonMatches}, {DiffNano, CurrentAllocations}}}, Context};
+    X -> {{error, {betree_search, X}}, Context}
   end.
 
 stats_collector({DiffNano, Allocations}, #be_evaluator_stats{
