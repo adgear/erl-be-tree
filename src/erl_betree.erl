@@ -44,6 +44,7 @@
     betree_search_err/2,
     betree_search_err/3,
     betree_parse_reasons/1,
+    betree_parse_reasons/2,
     betree_write_dot_err/2,
     betree_search_ids_err/3,
     betree_search_ids_err/4
@@ -212,10 +213,13 @@ betree_search_err(Betree, Event, ClockType) when is_list(Event), is_integer(Cloc
 betree_search_err(Betree, Event, ClockType) when is_reference(Event), is_integer(ClockType) ->
     erl_betree_nif:betree_search_evt_err(Betree, Event, ClockType).
 
-betree_parse_reasons([]) ->
+betree_parse_reasons(NonMatches) ->
+    betree_parse_reasons(NonMatches, betree_).
+
+betree_parse_reasons([], _) ->
     {ok, []};
-betree_parse_reasons(NonMatches) when is_reference(NonMatches) ->
-    erl_betree_nif:betree_parse_reasons(NonMatches).
+betree_parse_reasons(NonMatches, Prefix) when is_reference(NonMatches), is_atom(Prefix) ->
+    erl_betree_nif:betree_parse_reasons(NonMatches, Prefix).
 
 betree_write_dot_err(Betree, FileName) when is_list(FileName) ->
     erl_betree_nif:betree_write_dot_err(Betree, FileName).

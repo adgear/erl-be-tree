@@ -63,7 +63,7 @@ atom_validate_event_failed_test() ->
     erl_betree:betree_write_dot_err(Betree, "test/betree_search_tests.dot"),
     {{error, [], NonMatches}, _} = erl_betree:betree_search_err(Betree, Event, 0),
     {ok, Res} = erl_betree:betree_parse_reasons(NonMatches),
-    ?assertEqual([{invalid_event, [1,2,3]}], Res),
+    ?assertEqual([{betree_invalid_event, [1,2,3]}], Res),
     ok.
 
 atom_all_search_term_test() ->
@@ -134,7 +134,7 @@ atom_all_search_term_test() ->
     ok = erl_betree:betree_make_sub_ids(Betree),
     {{ok, [1, 2], NonMatches}, _} = erl_betree:betree_search_err(Betree, Event, 0),
     {ok, Res} = erl_betree:betree_parse_reasons(NonMatches),
-    ?assertEqual([{f, [3]}], Res).
+    ?assertEqual([{betree_f, [3]}], Res).
 
 atom_event_search_term_test() ->
     Domains = [[
@@ -259,7 +259,7 @@ atom_ids_search_term_test() ->
 
       {{ok, [1,2], NonMatches}, _} = erl_betree:betree_search_err(Betree, Evt, 0),
       {ok, Res0} = erl_betree:betree_parse_reasons(NonMatches),
-      ?assertEqual([{s,[3]}], Res0),
+      ?assertEqual([{betree_s,[3]}], Res0),
       ok.
 
 two_betrees_test() ->
@@ -288,7 +288,7 @@ two_betrees_test() ->
   {{ok, Matched1, NonMatched1}, _} = Ret_betree1_search,
   {ok, ResNonMatched1} = erl_betree:betree_parse_reasons(NonMatched1),
   ?assertEqual([], Matched1),
-  ?assertEqual([{par1,[1]}], ResNonMatched1),
+  ?assertEqual([{betree_par1,[1]}], ResNonMatched1),
 
   Ret_betree2_search = erl_betree:betree_search_err(Betree2, Evt, 0),
   ?assertMatch({{ok, _, _}, _}, Ret_betree2_search),
@@ -374,7 +374,7 @@ three_betrees_search_ids_test() ->
   {{ok, Matched1, NonMatched1}, _} = Ret_betree1_search,
   {ok, ResNonMatched1} = erl_betree:betree_parse_reasons(NonMatched1),
   ?assertEqual([1,3,4], Matched1),
-  ?assertEqual([{par1,[2]}], ResNonMatched1),
+  ?assertEqual([{betree_par1,[2]}], ResNonMatched1),
 
   Ret_betree2_search_ids = erl_betree:betree_search_ids_err(Betree2, Evt, Matched1, 0),
   ?assertMatch({{ok, _, _}, _}, Ret_betree2_search_ids),
@@ -419,7 +419,7 @@ search_empty_list_of_ids_test() ->
   {{ok, Matched1, NonMatched1}, _} = Ret_betree1_search,
   {ok, ResNonMatched1} = erl_betree:betree_parse_reasons(NonMatched1),
   ?assertEqual([1], Matched1),
-  ?assertEqual([{par1,[2]}], ResNonMatched1),
+  ?assertEqual([{betree_par1,[2]}], ResNonMatched1),
 
   % Search empty list of Ids
   Ret_betree2_search_ids = erl_betree:betree_search_ids_err(Betree2, Evt, [], 0),
@@ -477,7 +477,7 @@ not_and_test() ->
   {ok, Ids, NonMatches} = Ret,
   {ok, ResNonMatches} = erl_betree:betree_parse_reasons(NonMatches),
   ?assertEqual([Id2, Id4], lists:sort(Ids)),
-  ?assertEqual([{p1,[101]},{p3,[303]}], lists:sort(ResNonMatches)).
+  ?assertEqual([{betree_p1,[101]},{betree_p3,[303]}], lists:sort(ResNonMatches)).
 
 not_or_test() ->
   Params = [
@@ -538,7 +538,7 @@ not_or_test() ->
   {ok, ConvNonMatches} = erl_betree:betree_parse_reasons(NonMatches),
   ?assert(is_list(ConvNonMatches)),
   ?assertEqual([Id1, Id2, Id4], lists:sort(Ids)),
-  ?assertEqual([{p1, [Id3]}, {p3, [Id5]}], lists:sort(ConvNonMatches)).
+  ?assertEqual([{betree_p1, [Id3]}, {betree_p3, [Id5]}], lists:sort(ConvNonMatches)).
 
 atom_event_search_reason_test() ->
     Domains = [[
@@ -573,5 +573,5 @@ atom_event_search_reason_test() ->
     ok = erl_betree:betree_make_sub_ids(Betree),
     {{ok, [], Res}, _} = erl_betree:betree_search_err(Betree, Event, 0),
     {ok, ConvRes} = erl_betree:betree_parse_reasons(Res),
-    ?assertEqual([{b,[4,5,6,7]},{s,[1,2,3]}], lists:sort(ConvRes)),
+    ?assertEqual([{betree_b,[4,5,6,7]},{betree_s,[1,2,3]}], lists:sort(ConvRes)),
     ok.

@@ -1634,7 +1634,7 @@ static ERL_NIF_TERM nif_betree_parse_reasons(ErlNifEnv *env, int argc,
   ERL_NIF_TERM retval;
   struct betree_reason_map_t *reasons = NULL;
 
-  if (argc != 1) {
+  if (argc != 2) {
     retval = enif_make_badarg(env);
     goto cleanup;
   }
@@ -1645,9 +1645,18 @@ static ERL_NIF_TERM nif_betree_parse_reasons(ErlNifEnv *env, int argc,
     goto cleanup;
   }
 
+  ERL_NIF_TERM arg_atom = argv[1];
+  char reason_prefix[CONSTANT_NAME_LEN];
+  if (!enif_get_atom(env, arg_atom, reason_prefix, CONSTANT_NAME_LEN, ERL_NIF_LATIN1)) {
+    retval = enif_make_badarg(env);
+    goto cleanup;
+  }
+
   ERL_NIF_TERM res = enif_make_list(env, 0);
   size_t res_size = reasons->size;
   for (size_t idx = 0; idx < res_size; idx++) {
+    char new_reason_name[CONSTANT_NAME_LEN];
+    sprintf(new_reason_name, "%s%s", reason_prefix, reasons->reasons[idx]->name);
     size_t sz = reasons->reasons[idx]->list->size;
     if (sz > 0) {
       ERL_NIF_TERM sub_res = enif_make_list(env, 0);
@@ -1666,7 +1675,7 @@ static ERL_NIF_TERM nif_betree_parse_reasons(ErlNifEnv *env, int argc,
       }
       enif_free((void *)ids);
       ERL_NIF_TERM res_single_key_list = enif_make_tuple2(
-          env, enif_make_atom(env, reasons->reasons[idx]->name), sub_res);
+          env, enif_make_atom(env, new_reason_name), sub_res);
       res = enif_make_list_cell(env, res_single_key_list, res);
     }
   }
@@ -3092,7 +3101,7 @@ static ErlNifFunc nif_functions[] = {
     {"betree_search_evt_err", 3, nif_betree_search_evt_err, 0},
     {"betree_search_evt_err", 4, nif_betree_search_evt_ids_err, 0},
     {"betree_search_ids_err", 4, nif_betree_search_ids_err, 0},
-    {"betree_parse_reasons", 1, nif_betree_parse_reasons, 0},
+    {"betree_parse_reasons", 2, nif_betree_parse_reasons, 0},
     {"betree_write_dot_err", 2, betree_write_dot_err, ERL_DIRTY_JOB_IO_BOUND},
 };
 
