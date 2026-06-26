@@ -1,0 +1,3 @@
+[submodule "be-tree"]
+	path = be-tree
+	url = https://github.com/x0id/be-tree.git
